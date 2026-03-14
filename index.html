@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AIプロンプトビルダー v4</title>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@300;400;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f5f2eb;
+    --paper: #fdfaf4;
+    --ink: #1a1810;
+    --ink-mid: #5a5548;
+    --ink-light: #9a9488;
+    --rule: #ddd8cc;
+    --accent: #c84b2f;
+    --accent-pale: rgba(200,75,47,0.08);
+    --green: #2d6a4f;
+    --green-pale: rgba(45,106,79,0.1);
+    --green-mid: rgba(45,106,79,0.25);
+    --role-color: #1a5276;
+    --role-pale: rgba(26,82,118,0.08);
+    --role-mid: rgba(26,82,118,0.2);
+    --gold: #b8860b;
+    --gold-pale: rgba(184,134,11,0.08);
+    --gold-mid: rgba(184,134,11,0.2);
+    --honest: #6b3fa0;
+    --honest-pale: rgba(107,63,160,0.08);
+    --honest-mid: rgba(107,63,160,0.2);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    background-image: repeating-linear-gradient(0deg, transparent, transparent 27px, var(--rule) 27px, var(--rule) 28px);
+    color: var(--ink);
+    font-family: 'Zen Kaku Gothic New', sans-serif;
+    font-weight: 300;
+    min-height: 100vh;
+    padding: 48px 20px 80px;
+  }
+
+  .container { max-width: 700px; margin: 0 auto; }
+
+  /* ヘッダー */
+  header {
+    background: var(--paper);
+    border: 2px solid var(--ink);
+    border-bottom: 4px solid var(--ink);
+    border-radius: 4px;
+    padding: 28px 32px;
+    margin-bottom: 24px;
+    position: relative;
+    overflow: hidden;
+  }
+  header::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 6px; height: 100%;
+    background: var(--accent);
+  }
+  .header-inner { padding-left: 16px; }
+  .header-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.3em;
+    text-transform: uppercase; color: var(--accent);
+    margin-bottom: 6px; font-family: 'DM Mono', monospace;
+  }
+  h1 { font-size: 26px; font-weight: 900; line-height: 1.2; letter-spacing: -0.02em; }
+  .header-sub { font-size: 13px; color: var(--ink-mid); margin-top: 8px; line-height: 1.6; }
+
+  .badge {
+    display: inline-block; color: #fff; font-size: 9px; font-weight: 700;
+    letter-spacing: 0.1em; padding: 2px 7px; border-radius: 2px;
+    font-family: 'DM Mono', monospace; margin-left: 6px; vertical-align: middle;
+  }
+  .badge-role { background: var(--role-color); }
+  .badge-new { background: var(--accent); }
+
+  /* ━━━ 品質スコアバー ━━━ */
+  .score-bar-wrap {
+    background: var(--paper);
+    border: 2px solid var(--ink);
+    border-radius: 4px;
+    padding: 16px 20px;
+    margin-bottom: 20px;
+    position: sticky;
+    top: 12px;
+    z-index: 100;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  }
+  .score-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .score-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.2em;
+    text-transform: uppercase; color: var(--ink-mid);
+    font-family: 'DM Mono', monospace;
+  }
+  .score-number {
+    font-family: 'DM Mono', monospace; font-size: 22px; font-weight: 500;
+    transition: color 0.4s;
+  }
+  .score-track {
+    height: 6px; background: var(--rule); border-radius: 3px; overflow: hidden;
+    margin-bottom: 10px;
+  }
+  .score-fill {
+    height: 100%; border-radius: 3px;
+    transition: width 0.5s cubic-bezier(0.34,1.56,0.64,1), background 0.4s;
+    background: var(--accent);
+  }
+  .score-items {
+    display: flex; flex-wrap: wrap; gap: 6px;
+  }
+  .score-item {
+    font-size: 10px; padding: 3px 9px; border-radius: 20px;
+    border: 1px solid var(--rule); color: var(--ink-light);
+    font-family: 'DM Mono', monospace; transition: all 0.3s;
+    display: flex; align-items: center; gap: 4px;
+  }
+  .score-item.ok { background: var(--green-pale); border-color: var(--green); color: var(--green); }
+  .score-item.ok::before { content: '✓'; font-weight: 700; }
+  .score-item.ng::before { content: '○'; opacity: 0.5; }
+
+  /* ステップバー */
+  .steps-bar {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    margin-bottom: 20px;
+    background: var(--paper);
+    border: 2px solid var(--ink);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .step-item {
+    padding: 8px 3px; text-align: center;
+    font-size: 9px; font-weight: 700; letter-spacing: 0.02em;
+    color: var(--ink-light); border-right: 1px solid var(--rule);
+    cursor: pointer; transition: background 0.15s, color 0.15s;
+  }
+  .step-item:last-child { border-right: none; }
+  .step-item.active { background: var(--accent); color: #fff; }
+  .step-item.done { background: var(--accent-pale); color: var(--accent); }
+  .step-item.role-step.active { background: var(--role-color); }
+  .step-item.role-step.done { background: var(--role-pale); color: var(--role-color); }
+  .step-item.new-step.active { background: var(--gold); }
+  .step-item.new-step.done { background: var(--gold-pale); color: var(--gold); }
+  .step-num { display: block; font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500; line-height: 1; margin-bottom: 2px; }
+
+  /* カード */
+  .card {
+    background: var(--paper);
+    border: 2px solid var(--ink); border-bottom: 4px solid var(--ink);
+    border-radius: 4px; padding: 28px; margin-bottom: 16px;
+    display: none; animation: fadeIn 0.2s ease;
+  }
+  .card.visible { display: block; }
+  .card.role-card { border-left: 6px solid var(--role-color); }
+  .card.new-card { border-left: 6px solid var(--gold); }
+
+  @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+
+  .card-title {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.25em;
+    text-transform: uppercase; color: var(--accent);
+    font-family: 'DM Mono', monospace; margin-bottom: 4px;
+  }
+  .card-title.role { color: var(--role-color); }
+  .card-title.new { color: var(--gold); }
+  .card-heading { font-size: 20px; font-weight: 900; margin-bottom: 6px; }
+  .card-desc {
+    font-size: 12px; color: var(--ink-mid); margin-bottom: 24px;
+    line-height: 1.7; padding-bottom: 16px; border-bottom: 1px dashed var(--rule);
+  }
+
+  /* ヒントボックス */
+  .tip-box {
+    border-radius: 4px; padding: 12px 16px;
+    font-size: 12px; line-height: 1.7; margin-bottom: 20px;
+  }
+  .tip-box.blue { background: var(--role-pale); border: 1px solid var(--role-mid); color: var(--role-color); }
+  .tip-box.gold { background: var(--gold-pale); border: 1px solid var(--gold-mid); color: var(--gold); }
+  .tip-box.green { background: var(--green-pale); border: 1px solid var(--green-mid); color: var(--green); }
+  .tip-box strong { font-weight: 700; }
+
+  /* フォーム */
+  .field { margin-bottom: 20px; }
+  .field:last-of-type { margin-bottom: 0; }
+
+  label {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; font-weight: 700; letter-spacing: 0.06em;
+    color: var(--ink-mid); margin-bottom: 7px; text-transform: uppercase;
+  }
+  .req { font-size: 10px; color: var(--accent); font-family: 'DM Mono', monospace; font-weight: 400; letter-spacing: 0; text-transform: none; }
+  .opt { font-size: 10px; color: var(--ink-light); font-family: 'DM Mono', monospace; font-weight: 400; letter-spacing: 0; text-transform: none; }
+
+  input[type="text"], textarea, select {
+    width: 100%; background: var(--bg); border: 1.5px solid var(--rule);
+    border-radius: 3px; color: var(--ink);
+    font-family: 'Zen Kaku Gothic New', sans-serif; font-size: 14px;
+    font-weight: 400; padding: 10px 14px; outline: none;
+    transition: border-color 0.15s, background 0.15s; -webkit-appearance: none;
+  }
+  input[type="text"]:focus, textarea:focus, select:focus { border-color: var(--accent); background: #fff; }
+  .role-card input:focus, .role-card textarea:focus { border-color: var(--role-color); }
+  .new-card input:focus, .new-card textarea:focus { border-color: var(--gold); }
+  textarea { resize: vertical; min-height: 90px; line-height: 1.7; }
+
+  /* チップ */
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
+  .chip {
+    padding: 6px 14px; border: 1.5px solid var(--rule); border-radius: 2px;
+    font-size: 12px; font-weight: 400; color: var(--ink-mid);
+    cursor: pointer; transition: all 0.15s; user-select: none; background: var(--bg);
+  }
+  .chip:hover { border-color: var(--ink-mid); color: var(--ink); }
+  .chip.selected { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+
+  /* トグルスイッチ */
+  .toggle-row {
+    display: flex; align-items: center; gap: 14px;
+    background: var(--bg); border: 1.5px solid var(--rule);
+    border-radius: 4px; padding: 12px 16px;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .toggle-row:hover { border-color: var(--gold); }
+  .toggle-row.active { border-color: var(--gold); background: var(--gold-pale); }
+  .toggle-switch {
+    width: 40px; height: 22px; background: var(--rule); border-radius: 11px;
+    position: relative; transition: background 0.2s; flex-shrink: 0;
+  }
+  .toggle-switch::after {
+    content: ''; position: absolute; top: 3px; left: 3px;
+    width: 16px; height: 16px; background: #fff; border-radius: 50%;
+    transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  }
+  .toggle-row.active .toggle-switch { background: var(--gold); }
+  .toggle-row.active .toggle-switch::after { transform: translateX(18px); }
+  .toggle-text { font-size: 13px; font-weight: 700; }
+  .toggle-desc { font-size: 11px; color: var(--ink-light); margin-top: 1px; }
+
+  /* Few-shot ペア */
+  .fewshot-pairs { display: flex; flex-direction: column; gap: 12px; }
+  .fewshot-pair {
+    border: 1.5px solid var(--rule); border-radius: 4px;
+    overflow: hidden; background: var(--bg);
+  }
+  .fewshot-pair-header {
+    background: var(--rule); padding: 6px 12px;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--ink-mid);
+    font-family: 'DM Mono', monospace;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .fewshot-del {
+    cursor: pointer; color: var(--accent); font-size: 14px; line-height: 1;
+    padding: 0 4px; font-weight: 700; opacity: 0.6;
+  }
+  .fewshot-del:hover { opacity: 1; }
+  .fewshot-pair textarea {
+    border: none; border-bottom: 1px solid var(--rule); border-radius: 0;
+    min-height: 64px; background: var(--bg);
+  }
+  .fewshot-pair textarea:last-child { border-bottom: none; }
+  .fewshot-pair textarea:focus { border-color: var(--gold); background: #fff; }
+  .add-pair-btn {
+    width: 100%; padding: 10px; background: transparent;
+    border: 1.5px dashed var(--rule); border-radius: 4px;
+    font-family: inherit; font-size: 12px; font-weight: 700;
+    color: var(--ink-light); cursor: pointer; transition: all 0.15s;
+    margin-top: 8px;
+  }
+  .add-pair-btn:hover { border-color: var(--gold); color: var(--gold); background: var(--gold-pale); }
+
+  /* スライダー */
+  .slider-row { display: flex; align-items: center; gap: 14px; }
+  input[type="range"] { flex:1; -webkit-appearance:none; height:3px; background:var(--rule); border-radius:2px; outline:none; }
+  input[type="range"]::-webkit-slider-thumb { -webkit-appearance:none; width:18px; height:18px; background:var(--accent); border-radius:50%; cursor:pointer; border:2px solid #fff; box-shadow:0 1px 4px rgba(0,0,0,0.2); }
+  .slider-val { font-family:'DM Mono',monospace; font-size:13px; font-weight:500; color:var(--accent); width:28px; text-align:right; }
+  .slider-labels { display:flex; justify-content:space-between; font-size:10px; color:var(--ink-light); letter-spacing:0.04em; margin-top:4px; }
+
+  /* ナビ */
+  .nav { display:flex; gap:10px; margin-top:24px; padding-top:20px; border-top:1px dashed var(--rule); }
+  .btn { padding:11px 24px; border:2px solid var(--ink); border-radius:3px; font-family:inherit; font-size:13px; font-weight:700; letter-spacing:0.06em; cursor:pointer; transition:all 0.15s; }
+  .btn-back { background:transparent; color:var(--ink-mid); border-color:var(--rule); }
+  .btn-back:hover { border-color:var(--ink-mid); color:var(--ink); }
+  .btn-next { background:var(--ink); color:var(--paper); margin-left:auto; border-bottom-width:4px; }
+  .btn-next:hover { background:var(--accent); border-color:var(--accent); }
+
+  /* コピーボタン */
+  .copy-btn {
+    width:100%; padding:16px; background:var(--accent);
+    border:2px solid var(--accent); border-bottom:4px solid #8c2f1a;
+    border-radius:3px; color:#fff; font-family:inherit;
+    font-size:15px; font-weight:900; letter-spacing:0.08em;
+    cursor:pointer; transition:all 0.15s; margin-top:8px;
+  }
+  .copy-btn:hover { transform:translateY(-1px); }
+  .copy-btn:active { transform:translateY(1px); border-bottom-width:2px; }
+  .copy-btn.copied { background:var(--green); border-color:var(--green); border-bottom-color:#1a3d2e; }
+
+  /* プレビュー */
+  .preview-card { background:var(--paper); border:2px solid var(--ink); border-radius:4px; overflow:hidden; margin-top:16px; }
+  .preview-header { background:var(--ink); color:var(--paper); padding:10px 18px; font-size:11px; font-weight:700; letter-spacing:0.2em; text-transform:uppercase; font-family:'DM Mono',monospace; display:flex; justify-content:space-between; align-items:center; }
+  .preview-badges { display:flex; gap:6px; align-items:center; }
+  .preview-badge { font-size:9px; padding:2px 7px; border-radius:2px; color:#fff; font-family:'DM Mono',monospace; display:none; }
+  .preview-badge.role { background:var(--role-color); }
+  .preview-badge.fewshot { background:var(--gold); }
+  .preview-badge.confirm { background:var(--green); }
+  .preview-badge.honest { background:var(--honest); }
+  .card.honest-card { border-left: 6px solid var(--honest); }
+  .tip-box.honest { background:var(--honest-pale); border:1px solid var(--honest-mid); color:var(--honest); }
+  .toggle-row.honest-toggle:hover { border-color:var(--honest); }
+  .toggle-row.honest-toggle.active { border-color:var(--honest); background:var(--honest-pale); }
+  .toggle-row.honest-toggle.active .toggle-switch { background:var(--honest); }
+  .preview-chars { font-size:10px; color:rgba(255,255,255,0.4); }
+  .preview-body { padding:20px; font-family:'DM Mono',monospace; font-size:12px; line-height:1.9; color:var(--ink-mid); white-space:pre-wrap; word-break:break-word; max-height:360px; overflow-y:auto; background:#fafaf7; }
+  .preview-body::-webkit-scrollbar { width:4px; }
+  .preview-body::-webkit-scrollbar-thumb { background:var(--rule); border-radius:2px; }
+  .hint { text-align:center; font-size:11px; color:var(--ink-light); margin-top:10px; letter-spacing:0.04em; }
+
+  /* 役割プリセット */
+  .role-presets { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:16px; }
+  .role-preset { border:1.5px solid var(--rule); border-radius:4px; padding:10px 12px; cursor:pointer; transition:all 0.15s; background:var(--bg); }
+  .role-preset:hover { border-color:var(--role-color); background:var(--role-pale); }
+  .role-preset.selected { border-color:var(--role-color); background:var(--role-pale); }
+  .role-preset-icon { font-size:20px; margin-bottom:4px; }
+  .role-preset-name { font-size:12px; font-weight:700; color:var(--ink); }
+  .role-preset-desc { font-size:10px; color:var(--ink-light); margin-top:2px; line-height:1.4; }
+
+  @media (max-width:480px) {
+    .steps-bar { grid-template-columns:repeat(4,1fr); }
+    .role-presets { grid-template-columns:repeat(2,1fr); }
+  }
+  select option { background:#fdfaf4; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="header-inner">
+      <div class="header-label">AI Prompt Builder v4</div>
+      <h1>AIへの指示を整理するフォーム
+        <span class="badge badge-role">役割設定</span>
+        <span class="badge badge-new">v4 NEW</span>
+      </h1>
+      <div class="header-sub">誠実性モードを追加。AIが「わからないことはわからない」と答えるよう指示し、ハルシネーションを最小化します。</div>
+    </div>
+  </header>
+
+  <!-- 品質スコア（sticky） -->
+  <div class="score-bar-wrap">
+    <div class="score-header">
+      <span class="score-label">▎ Prompt Quality Score</span>
+      <span class="score-number" id="scoreNumber">0 / 100</span>
+    </div>
+    <div class="score-track"><div class="score-fill" id="scoreFill" style="width:0%"></div></div>
+    <div class="score-items" id="scoreItems">
+      <div class="score-item ng" id="si-role">役割設定</div>
+      <div class="score-item ng" id="si-task">依頼内容</div>
+      <div class="score-item ng" id="si-background">背景・文脈</div>
+      <div class="score-item ng" id="si-audience">対象読者</div>
+      <div class="score-item ng" id="si-fewshot">例示 (Few-shot)</div>
+      <div class="score-item ng" id="si-format">出力形式</div>
+      <div class="score-item ng" id="si-constraint">制約・NG</div>
+      <div class="score-item ng" id="si-confirm">確認質問ON</div>
+      <div class="score-item ng" id="si-honest">誠実性モード</div>
+    </div>
+  </div>
+
+  <!-- ステップバー -->
+  <div class="steps-bar" id="stepsBar">
+    <div class="step-item role-step active" onclick="goTo(0)"><span class="step-num">①</span>役割</div>
+    <div class="step-item" onclick="goTo(1)"><span class="step-num">②</span>目的</div>
+    <div class="step-item" onclick="goTo(2)"><span class="step-num">③</span>背景</div>
+    <div class="step-item" onclick="goTo(3)"><span class="step-num">④</span>素材</div>
+    <div class="step-item new-step" onclick="goTo(4)"><span class="step-num">⑤</span>例示</div>
+    <div class="step-item" onclick="goTo(5)"><span class="step-num">⑥</span>出力</div>
+    <div class="step-item" onclick="goTo(6)"><span class="step-num">⑦</span>制約</div>
+    <div class="step-item" onclick="goTo(7)"><span class="step-num">⑧</span>確認</div>
+  </div>
+
+  <!-- Step 0: 役割設定 -->
+  <div class="card role-card visible" id="step0">
+    <div class="card-title role">Step 01 / 08 — 役割設定（Role Prompting）</div>
+    <div class="card-heading">AIにどんな専門家になってもらいますか？</div>
+    <div class="card-desc">プロンプトの冒頭に役割を設定すると、回答の質・深さ・トーンが大きく変わります。</div>
+    <div class="tip-box blue"><strong>なぜ役割設定が効くのか？</strong><br>AIは文脈に沿って思考します。「マーケターとして答えて」と言うだけで、専門用語・視点・提案の深さが変わります。</div>
+    <div class="field">
+      <label>プリセットから選ぶ</label>
+      <div class="role-presets" id="rolePresets">
+        <div class="role-preset" data-role="経験豊富なコピーライター" data-persona="読者の心を動かす言葉を選び、説得力のある文章を書く"><div class="role-preset-icon">✍️</div><div class="role-preset-name">コピーライター</div><div class="role-preset-desc">文章・広告・SNS</div></div>
+        <div class="role-preset" data-role="シニアソフトウェアエンジニア" data-persona="保守性・可読性・パフォーマンスを重視したコードレビューと実装を行う"><div class="role-preset-icon">💻</div><div class="role-preset-name">エンジニア</div><div class="role-preset-desc">コード・技術</div></div>
+        <div class="role-preset" data-role="マーケティングストラテジスト" data-persona="データに基づいた戦略提案と、ターゲットに響くメッセージング設計を得意とする"><div class="role-preset-icon">📊</div><div class="role-preset-name">マーケター</div><div class="role-preset-desc">戦略・分析・施策</div></div>
+        <div class="role-preset" data-role="プロの編集者・ライター" data-persona="読みやすさ・論理構成・表現の正確さを重視した厳しくも的確なフィードバックを行う"><div class="role-preset-icon">📝</div><div class="role-preset-name">編集者</div><div class="role-preset-desc">添削・構成改善</div></div>
+        <div class="role-preset" data-role="経験豊富なビジネスコンサルタント" data-persona="課題の本質を素早く見抜き、実行可能な改善策を論理的に提案する"><div class="role-preset-icon">💼</div><div class="role-preset-name">コンサルタント</div><div class="role-preset-desc">課題解決・提案</div></div>
+        <div class="role-preset" data-role="優しく丁寧な教師・チューター" data-persona="専門用語を避け、具体的な例えを使いながら初心者にもわかりやすく説明する"><div class="role-preset-icon">🎓</div><div class="role-preset-name">教師・先生</div><div class="role-preset-desc">説明・学習サポート</div></div>
+        <div class="role-preset" data-role="UX/UIデザイナー" data-persona="ユーザー視点でのデザイン改善提案と、視覚的な整理・情報設計を行う"><div class="role-preset-icon">🎨</div><div class="role-preset-name">デザイナー</div><div class="role-preset-desc">UI・UX・ビジュアル</div></div>
+        <div class="role-preset" data-role="データサイエンティスト・アナリスト" data-persona="数値データから洞察を引き出し、根拠のある意思決定をサポートする"><div class="role-preset-icon">📈</div><div class="role-preset-name">アナリスト</div><div class="role-preset-desc">データ分析・調査</div></div>
+        <div class="role-preset" data-role="辛口な批評家・レビュアー" data-persona="甘えを排除し、改善点を具体的かつ率直に指摘することでクオリティを高める"><div class="role-preset-icon">🔍</div><div class="role-preset-name">辛口批評家</div><div class="role-preset-desc">厳しいフィードバック</div></div>
+      </div>
+    </div>
+    <div class="field">
+      <label>役割をカスタム入力 <span class="opt">任意</span></label>
+      <input type="text" id="role_custom" placeholder="例：10年以上の経験を持つ採用担当のHRマネージャー">
+    </div>
+    <div class="field">
+      <label>回答スタイル・ペルソナの補足 <span class="opt">任意</span></label>
+      <input type="text" id="role_persona" placeholder="例：初心者にもわかりやすく、具体例を多めに使って説明してください">
+    </div>
+    <div class="nav"><button class="btn btn-next" onclick="goTo(1)">次へ →</button></div>
+  </div>
+
+  <!-- Step 1: 目的 -->
+  <div class="card" id="step1">
+    <div class="card-title">Step 02 / 08</div>
+    <div class="card-heading">何をしてほしいですか？</div>
+    <div class="card-desc">依頼の核心です。「〜してほしい」を1〜2文で書きましょう。</div>
+    <div class="field">
+      <label>依頼の種類 <span class="req">必須</span></label>
+      <div class="chips" id="task_type_chips">
+        <div class="chip" data-val="文章を書く">文章を書く</div>
+        <div class="chip" data-val="要約・整理する">要約・整理する</div>
+        <div class="chip" data-val="アイデアを出す">アイデアを出す</div>
+        <div class="chip" data-val="調べる・説明する">調べる・説明する</div>
+        <div class="chip" data-val="翻訳する">翻訳する</div>
+        <div class="chip" data-val="コードを書く">コードを書く</div>
+        <div class="chip" data-val="添削・改善する">添削・改善する</div>
+        <div class="chip" data-val="計画を立てる">計画を立てる</div>
+        <div class="chip" data-val="その他">その他</div>
+      </div>
+      <input type="text" id="task_type_other" placeholder="その他の場合は入力" style="margin-top:10px;display:none;">
+    </div>
+    <div class="field">
+      <label>具体的な依頼内容 <span class="req">必須</span></label>
+      <textarea id="task_detail" placeholder="例：先週の会議の議事録を、アクションアイテムが分かるように箇条書きで整理してほしい"></textarea>
+    </div>
+    <div class="nav">
+      <button class="btn btn-back" onclick="goTo(0)">← 戻る</button>
+      <button class="btn btn-next" onclick="goTo(2)">次へ →</button>
+    </div>
+  </div>
+
+  <!-- Step 2: 背景 -->
+  <div class="card" id="step2">
+    <div class="card-title">Step 03 / 08</div>
+    <div class="card-heading">背景・文脈を教えてください</div>
+    <div class="card-desc">「なぜこれが必要か」をAIが理解すると、回答の質が上がります。</div>
+    <div class="field">
+      <label>あなたの立場・役割</label>
+      <input type="text" id="user_role" placeholder="例：中小企業のマーケ担当、フリーランスのデザイナー">
+    </div>
+    <div class="field">
+      <label>この依頼の背景・目的</label>
+      <textarea id="background" placeholder="例：来週のプレゼン用に資料をまとめている。上司への報告なので簡潔さが大事。" style="min-height:80px;"></textarea>
+    </div>
+    <div class="field">
+      <label>対象読者・受け取る相手</label>
+      <input type="text" id="audience" placeholder="例：IT知識のない50代の経営者">
+    </div>
+    <div class="nav">
+      <button class="btn btn-back" onclick="goTo(1)">← 戻る</button>
+      <button class="btn btn-next" onclick="goTo(3)">次へ →</button>
+    </div>
+  </div>
+
+  <!-- Step 3: 素材 -->
+  <div class="card" id="step3">
+    <div class="card-title">Step 04 / 08</div>
+    <div class="card-heading">素材・参考情報はありますか？</div>
+    <div class="card-desc">AIに渡すデータや参考情報があれば貼り付けましょう。</div>
+    <div class="field">
+      <label>素材・貼り付けデータ</label>
+      <textarea id="material" placeholder="議事録テキスト、URLリスト、データの表など…" style="min-height:110px;"></textarea>
+    </div>
+    <div class="field">
+      <label>参考にしてほしいスタイル・例</label>
+      <input type="text" id="style_ref" placeholder="例：Appleの製品紹介ページのような簡潔さで">
+    </div>
+    <div class="nav">
+      <button class="btn btn-back" onclick="goTo(2)">← 戻る</button>
+      <button class="btn btn-next" onclick="goTo(4)">次へ →</button>
+    </div>
+  </div>
+
+  <!-- Step 4: Few-shot例示 ★NEW -->
+  <div class="card new-card" id="step4">
+    <div class="card-title new">Step 05 / 08 — Few-shot 例示（NEW）</div>
+    <div class="card-heading">入力と出力の「お手本」を見せましょう</div>
+    <div class="card-desc">「こういう入力にはこういう出力を返してほしい」という例を1〜3セット見せるだけで、AIが意図を正確に把握します。</div>
+    <div class="tip-box gold">
+      <strong>Few-shotとは？</strong><br>
+      AIに例を見せて学ばせる手法。「お手本ゼロ（Zero-shot）」より例が1つあるだけで精度が大幅アップします。<br>
+      例：<strong>入力</strong>「会議が長かった」→<strong>出力</strong>「会議時間の短縮施策を検討してください」
+    </div>
+    <div class="fewshot-pairs" id="fewshotPairs"></div>
+    <button class="add-pair-btn" onclick="addFewshotPair()">＋ 入出力ペアを追加する</button>
+    <div class="nav">
+      <button class="btn btn-back" onclick="goTo(3)">← 戻る</button>
+      <button class="btn btn-next" onclick="goTo(5)">次へ →</button>
+    </div>
+  </div>
+
+  <!-- Step 5: 出力形式 -->
+  <div class="card" id="step5">
+    <div class="card-title">Step 06 / 08</div>
+    <div class="card-heading">どんな形で返してほしいですか？</div>
+    <div class="card-desc">出力形式を指定すると、そのまま使えるアウトプットが得られます。</div>
+    <div class="field">
+      <label>出力フォーマット</label>
+      <div class="chips" id="format_chips">
+        <div class="chip" data-val="箇条書き（リスト）">箇条書き</div>
+        <div class="chip" data-val="段落形式の文章">段落文章</div>
+        <div class="chip" data-val="表（テーブル）">表</div>
+        <div class="chip" data-val="コード">コード</div>
+        <div class="chip" data-val="マークダウン">マークダウン</div>
+        <div class="chip" data-val="Q&A形式">Q&A形式</div>
+        <div class="chip" data-val="ステップバイステップ">ステップ形式</div>
+        <div class="chip" data-val="自由（おまかせ）">おまかせ</div>
+      </div>
+    </div>
+    <div class="field">
+      <label>長さ・ボリューム感</label>
+      <div class="slider-row">
+        <span style="font-size:12px;color:var(--ink-light);">短く</span>
+        <input type="range" id="length_slider" min="1" max="5" value="3" oninput="updateSlider()">
+        <span style="font-size:12px;color:var(--ink-light);">詳しく</span>
+        <span class="slider-val" id="slider_val">3</span>
+      </div>
+      <div class="slider-labels"><span>一言でOK</span><span>バランス</span><span>できるだけ詳しく</span></div>
+    </div>
+    <div class="field">
+      <label>言語・語調</label>
+      <div class="chips" id="tone_chips">
+        <div class="chip" data-val="丁寧・ビジネス向け">丁寧・ビジネス</div>
+        <div class="chip" data-val="カジュアル・フレンドリー">カジュアル</div>
+        <div class="chip" data-val="専門的・技術的">専門的</div>
+        <div class="chip" data-val="わかりやすく・シンプル">わかりやすく</div>
+        <div class="chip" data-val="English">English</div>
+      </div>
+    </div>
+    <div class="nav">
+      <button class="btn btn-back" onclick="goTo(4)">← 戻る</button>
+      <button class="btn btn-next" onclick="goTo(6)">次へ →</button>
+    </div>
+  </div>
+
+  <!-- Step 6: 制約 -->
+  <div class="card" id="step6">
+    <div class="card-title">Step 07 / 08</div>
+    <div class="card-heading">やってほしくないことは？</div>
+    <div class="card-desc">制約・NG条件を伝えると、余計なことをしない回答が得られます。</div>
+    <div class="field">
+      <label>NGワード・避けてほしい表現</label>
+      <input type="text" id="ng_words" placeholder="例：「〜させていただきます」は使わない">
+    </div>
+    <div class="field">
+      <label>やってほしくないこと・制限</label>
+      <textarea id="constraints" placeholder="例：結論は変えないで改善だけしてほしい、前置きは省いて本文から始めてほしい" style="min-height:80px;"></textarea>
+    </div>
+    <div class="field">
+      <label>その他・補足</label>
+      <input type="text" id="extra" placeholder="例：まず構成案だけ出してほしい、複数パターン出してほしい">
+    </div>
+    <div class="nav">
+      <button class="btn btn-back" onclick="goTo(5)">← 戻る</button>
+      <button class="btn btn-next" onclick="goTo(7)">次へ →</button>
+    </div>
+  </div>
+
+  <!-- Step 7: 確認・コピー（確認質問モード + 誠実性モード） -->
+  <div class="card new-card" id="step7">
+    <div class="card-title new">Step 08 / 08 — 最終設定 ＆ コピー</div>
+    <div class="card-heading">AIの動作を最終調整してください</div>
+    <div class="card-desc">確認質問モードと誠実性モードを組み合わせることで、AIの回答精度とハルシネーション対策を最大化できます。</div>
+
+    <div class="tip-box green" style="margin-bottom:16px;">
+      <strong>確認質問モードとは？</strong><br>
+      AIが曖昧なまま回答するのを防ぎます。特に<strong>複雑な依頼・長文生成・重要な判断</strong>のときに有効です。
+    </div>
+
+    <div class="toggle-row" id="confirmToggle" onclick="toggleConfirm()">
+      <div class="toggle-switch"></div>
+      <div>
+        <div class="toggle-text">確認質問モード</div>
+        <div class="toggle-desc" id="confirmDesc">OFF — すぐに回答を生成します</div>
+      </div>
+    </div>
+
+    <div id="confirmOptions" style="display:none; margin-top:12px;">
+      <div class="field">
+        <label>質問の上限数 <span class="opt">任意</span></label>
+        <div class="chips" id="confirm_limit_chips">
+          <div class="chip" data-val="1">最大1問</div>
+          <div class="chip selected" data-val="3">最大3問</div>
+          <div class="chip" data-val="5">最大5問</div>
+          <div class="chip" data-val="制限なし">制限なし</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:20px;">
+      <div class="tip-box honest" style="margin-bottom:16px;">
+        <strong>誠実性モードとは？（NEW）</strong><br>
+        「わからないことはわからないと答えてください」という指示をプロンプトに自動追加します。AIが知らないことを知ったかぶりして答える<strong>ハルシネーション（嘘・でたらめ）を最小化</strong>する最も効果的な方法です。
+      </div>
+
+      <div class="toggle-row honest-toggle" id="honestToggle" onclick="toggleHonest()">
+        <div class="toggle-switch"></div>
+        <div>
+          <div class="toggle-text">誠実性モード</div>
+          <div class="toggle-desc" id="honestDesc">OFF — 通常通り回答します</div>
+        </div>
+      </div>
+    </div>
+
+    <button class="copy-btn" id="copyBtn" onclick="copyToClipboard()" style="margin-top:24px;">
+      📋　プロンプトをコピーしてAIに貼り付ける
+    </button>
+    <p class="hint">ボタンを押すとクリップボードにコピーされます</p>
+
+    <div class="nav" style="border-top:none;padding-top:0;margin-top:16px;">
+      <button class="btn btn-back" onclick="goTo(6)">← 戻る</button>
+    </div>
+  </div>
+
+  <!-- プレビュー -->
+  <div class="preview-card">
+    <div class="preview-header">
+      <span>▎ PROMPT PREVIEW</span>
+      <div class="preview-badges">
+        <span class="preview-badge role" id="badge-role">役割設定</span>
+        <span class="preview-badge fewshot" id="badge-fewshot">Few-shot</span>
+        <span class="preview-badge confirm" id="badge-confirm">確認質問</span>
+        <span class="preview-badge honest" id="badge-honest">誠実性</span>
+        <span class="preview-chars" id="charCount">0文字</span>
+      </div>
+    </div>
+    <div class="preview-body" id="preview">入力を始めると、ここにプロンプトが自動生成されます…</div>
+  </div>
+
+</div>
+
+<script>
+  let currentStep = 0;
+  let confirmOn = false;
+  let confirmLimit = '3';
+  let honestOn = false;
+  const chipState = { task_type: '', format: [], tone: '' };
+  let fewshotPairCount = 0;
+
+  // ━━━ 役割プリセット ━━━
+  document.querySelectorAll('.role-preset').forEach(p => {
+    p.addEventListener('click', () => {
+      document.querySelectorAll('.role-preset').forEach(x => x.classList.remove('selected'));
+      p.classList.add('selected');
+      document.getElementById('role_custom').value = p.dataset.role;
+      document.getElementById('role_persona').value = p.dataset.persona;
+      updateAll();
+    });
+  });
+  document.getElementById('role_custom').addEventListener('input', () => {
+    document.querySelectorAll('.role-preset').forEach(x => x.classList.remove('selected'));
+    updateAll();
+  });
+
+  // ━━━ チップ ━━━
+  function setupSingleChips(id, key) {
+    document.getElementById(id).querySelectorAll('.chip').forEach(c => {
+      c.addEventListener('click', () => {
+        document.getElementById(id).querySelectorAll('.chip').forEach(x => x.classList.remove('selected'));
+        c.classList.add('selected');
+        chipState[key] = c.dataset.val;
+        if (key === 'task_type') document.getElementById('task_type_other').style.display = c.dataset.val === 'その他' ? 'block' : 'none';
+        updateAll();
+      });
+    });
+  }
+  function setupMultiChips(id, key) {
+    document.getElementById(id).querySelectorAll('.chip').forEach(c => {
+      c.addEventListener('click', () => {
+        c.classList.toggle('selected');
+        chipState[key] = Array.from(document.getElementById(id).querySelectorAll('.chip.selected')).map(x => x.dataset.val);
+        updateAll();
+      });
+    });
+  }
+  setupSingleChips('task_type_chips', 'task_type');
+  setupMultiChips('format_chips', 'format');
+  setupSingleChips('tone_chips', 'tone');
+
+  // 確認質問 上限チップ
+  document.getElementById('confirm_limit_chips').querySelectorAll('.chip').forEach(c => {
+    c.addEventListener('click', () => {
+      document.getElementById('confirm_limit_chips').querySelectorAll('.chip').forEach(x => x.classList.remove('selected'));
+      c.classList.add('selected');
+      confirmLimit = c.dataset.val;
+      updateAll();
+    });
+  });
+
+  // ━━━ 確認質問トグル ━━━
+  function toggleConfirm() {
+    confirmOn = !confirmOn;
+    const row = document.getElementById('confirmToggle');
+    const desc = document.getElementById('confirmDesc');
+    const opts = document.getElementById('confirmOptions');
+    row.classList.toggle('active', confirmOn);
+    desc.textContent = confirmOn ? 'ON — 回答前にAIが不明点を質問します' : 'OFF — すぐに回答を生成します';
+    opts.style.display = confirmOn ? 'block' : 'none';
+    updateAll();
+  }
+
+  // ━━━ 誠実性モードトグル ━━━
+  function toggleHonest() {
+    honestOn = !honestOn;
+    const row = document.getElementById('honestToggle');
+    const desc = document.getElementById('honestDesc');
+    row.classList.toggle('active', honestOn);
+    desc.textContent = honestOn
+      ? 'ON — わからないことはわからないと答えるよう指示します'
+      : 'OFF — 通常通り回答します';
+    updateAll();
+  }
+  function addFewshotPair() {
+    const id = ++fewshotPairCount;
+    const container = document.getElementById('fewshotPairs');
+    const pair = document.createElement('div');
+    pair.className = 'fewshot-pair';
+    pair.id = `fsp-${id}`;
+    pair.innerHTML = `
+      <div class="fewshot-pair-header">
+        <span>例示 ${id}</span>
+        <span class="fewshot-del" onclick="removeFewshotPair(${id})">✕</span>
+      </div>
+      <textarea id="fs-in-${id}" placeholder="入力例：〜〜のような文章を改善してほしい" oninput="updateAll()"></textarea>
+      <textarea id="fs-out-${id}" placeholder="期待する出力例：〜〜のように改善した文章" oninput="updateAll()"></textarea>
+    `;
+    container.appendChild(pair);
+    updateAll();
+  }
+
+  function removeFewshotPair(id) {
+    const el = document.getElementById(`fsp-${id}`);
+    if (el) { el.remove(); updateAll(); }
+  }
+
+  function getFewshotPairs() {
+    const pairs = [];
+    document.querySelectorAll('.fewshot-pair').forEach(pair => {
+      const id = pair.id.replace('fsp-', '');
+      const inp = document.getElementById(`fs-in-${id}`)?.value?.trim() || '';
+      const out = document.getElementById(`fs-out-${id}`)?.value?.trim() || '';
+      if (inp || out) pairs.push({ in: inp, out: out });
+    });
+    return pairs;
+  }
+
+  // ━━━ テキスト入力監視 ━━━
+  const watchIds = ['task_detail','task_type_other','user_role','background','audience','material','style_ref','ng_words','constraints','extra','role_custom','role_persona'];
+  watchIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', updateAll);
+  });
+
+  function updateSlider() {
+    document.getElementById('slider_val').textContent = document.getElementById('length_slider').value;
+    updateAll();
+  }
+
+  // ━━━ プロンプト生成 ━━━
+  function buildPrompt() {
+    const v = id => document.getElementById(id)?.value?.trim() || '';
+
+    const roleCustom = v('role_custom');
+    const rolePersona = v('role_persona');
+    const taskType = chipState.task_type === 'その他' ? v('task_type_other') : chipState.task_type;
+    const taskDetail = v('task_detail');
+    const userRole = v('user_role');
+    const background = v('background');
+    const audience = v('audience');
+    const material = v('material');
+    const styleRef = v('style_ref');
+    const format = chipState.format.length > 0 ? chipState.format.join('・') : '';
+    const lengthVal = document.getElementById('length_slider').value;
+    const lengthLabels = {'1':'非常に短く（一言〜2行）','2':'短め（3〜5行程度）','3':'バランス良く','4':'やや詳しく','5':'できるだけ詳しく'};
+    const tone = chipState.tone;
+    const ngWords = v('ng_words');
+    const constraints = v('constraints');
+    const extra = v('extra');
+    const fewshots = getFewshotPairs();
+
+    if (!taskDetail && !taskType && !roleCustom) return '入力を始めると、ここにプロンプトが自動生成されます…';
+
+    let lines = [];
+
+    // ① 確認質問モード（最初に宣言）
+    if (confirmOn) {
+      const limitStr = confirmLimit === '制限なし' ? '' : `（最大${confirmLimit}問）`;
+      lines.push('【はじめにお願い】');
+      lines.push(`回答を始める前に、内容をより正確に理解するために不明点があれば質問してください${limitStr}。すべての質問が終わったら回答を開始してください。`);
+      lines.push('');
+    }
+
+    // ② 役割設定
+    if (roleCustom || rolePersona) {
+      lines.push('【あなたへの役割設定】');
+      if (roleCustom) lines.push(`あなたは${roleCustom}です。`);
+      if (rolePersona) lines.push(rolePersona);
+      lines.push('');
+    }
+
+    // ③ 依頼
+    if (taskDetail || taskType) {
+      lines.push('【依頼内容】');
+      if (taskType) lines.push(`▸ 種類: ${taskType}`);
+      if (taskDetail) lines.push(taskDetail);
+      lines.push('');
+    }
+
+    // ④ 背景
+    if (userRole || background || audience) {
+      lines.push('【背景・文脈】');
+      if (userRole) lines.push(`▸ 依頼者の立場: ${userRole}`);
+      if (background) lines.push(background);
+      if (audience) lines.push(`▸ 対象読者・相手: ${audience}`);
+      lines.push('');
+    }
+
+    // ⑤ 素材
+    if (material) {
+      lines.push('【参考・素材データ】');
+      lines.push(material);
+      lines.push('');
+    }
+    if (styleRef) {
+      lines.push('【参考スタイル】');
+      lines.push(styleRef);
+      lines.push('');
+    }
+
+    // ⑥ Few-shot
+    if (fewshots.length > 0) {
+      lines.push('【入出力の例示（Few-shot）】');
+      lines.push('以下の例を参考に、同じスタイル・意図で回答してください。');
+      fewshots.forEach((p, i) => {
+        lines.push('');
+        lines.push(`--- 例 ${i+1} ---`);
+        if (p.in)  lines.push(`入力: ${p.in}`);
+        if (p.out) lines.push(`出力: ${p.out}`);
+      });
+      lines.push('');
+    }
+
+    // ⑦ 出力形式
+    if (format || tone || lengthVal !== '3') {
+      lines.push('【出力形式の指定】');
+      if (format) lines.push(`▸ フォーマット: ${format}`);
+      lines.push(`▸ 長さ・ボリューム: ${lengthLabels[lengthVal]}`);
+      if (tone) lines.push(`▸ 語調・スタイル: ${tone}`);
+      lines.push('');
+    }
+
+    // ⑧ 制約
+    if (ngWords || constraints) {
+      lines.push('【制約・NG条件】');
+      if (ngWords) lines.push(`▸ 避けてほしい表現: ${ngWords}`);
+      if (constraints) lines.push(constraints);
+      lines.push('');
+    }
+
+    if (extra) {
+      lines.push('【補足・その他の要望】');
+      lines.push(extra);
+      lines.push('');
+    }
+
+    // ⑨ 誠実性モード（末尾に追加）
+    if (honestOn) {
+      lines.push('【誠実性についてのお願い】');
+      lines.push('・不確かな情報や知識の範囲外の内容については、「確認が必要ですが〜」や「わかりません」と明示してください。');
+      lines.push('・推測と事実を必ず区別して回答してください。');
+      lines.push('・情報にソースや根拠がある場合は、できる限り示してください。');
+      lines.push('・知ったかぶりや曖昧な回答はしないでください。');
+      lines.push('');
+    }
+
+    return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  }
+
+  // ━━━ スコア計算 ━━━
+  function calcScore() {
+    const v = id => document.getElementById(id)?.value?.trim() || '';
+    const checks = {
+      role:       { ok: !!(v('role_custom')),                         pts: 15 },
+      task:       { ok: !!(v('task_detail') || chipState.task_type),  pts: 20 },
+      background: { ok: !!(v('background') || v('user_role')),        pts: 15 },
+      audience:   { ok: !!(v('audience')),                             pts: 10 },
+      fewshot:    { ok: getFewshotPairs().length > 0,                  pts: 15 },
+      format:     { ok: !!(chipState.format.length || chipState.tone), pts: 10 },
+      constraint: { ok: !!(v('ng_words') || v('constraints')),        pts: 5 },
+      confirm:    { ok: confirmOn,                                      pts: 5 },
+      honest:     { ok: honestOn,                                       pts: 5 },
+    };
+
+    let total = 0;
+    Object.entries(checks).forEach(([key, { ok, pts }]) => {
+      const el = document.getElementById(`si-${key}`);
+      if (ok) { total += pts; el.classList.add('ok'); el.classList.remove('ng'); }
+      else    { el.classList.remove('ok'); el.classList.add('ng'); }
+    });
+
+    const fill = document.getElementById('scoreFill');
+    const num  = document.getElementById('scoreNumber');
+    fill.style.width = total + '%';
+    num.textContent = total + ' / 100';
+
+    if (total >= 80)      { fill.style.background = '#2d6a4f'; num.style.color = '#2d6a4f'; }
+    else if (total >= 50) { fill.style.background = '#b8860b'; num.style.color = '#b8860b'; }
+    else                  { fill.style.background = 'var(--accent)'; num.style.color = 'var(--accent)'; }
+  }
+
+  // ━━━ まとめて更新 ━━━
+  function updateAll() {
+    const text = buildPrompt();
+    document.getElementById('preview').textContent = text;
+    document.getElementById('charCount').textContent = text.length + '文字';
+
+    const hasRole = document.getElementById('role_custom')?.value?.trim();
+    document.getElementById('badge-role').style.display    = hasRole ? 'inline-block' : 'none';
+    document.getElementById('badge-fewshot').style.display = getFewshotPairs().length > 0 ? 'inline-block' : 'none';
+    document.getElementById('badge-confirm').style.display = confirmOn ? 'inline-block' : 'none';
+    document.getElementById('badge-honest').style.display  = honestOn  ? 'inline-block' : 'none';
+
+    calcScore();
+  }
+
+  updateAll();
+
+  // ━━━ ステップ移動 ━━━
+  function goTo(step) {
+    document.querySelectorAll('.card').forEach((c, i) => c.classList.toggle('visible', i === step));
+    document.querySelectorAll('.step-item').forEach((s, i) => {
+      s.classList.remove('active', 'done');
+      if (i === step) s.classList.add('active');
+      else if (i < step) s.classList.add('done');
+    });
+    currentStep = step;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  // ━━━ コピー ━━━
+  function copyToClipboard() {
+    const text = buildPrompt();
+    if (text.startsWith('入力を始めると')) { alert('先に依頼内容を入力してください。'); return; }
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = document.getElementById('copyBtn');
+      btn.textContent = '✅　コピー完了！AIに貼り付けてください';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = '📋　プロンプトをコピーしてAIに貼り付ける'; btn.classList.remove('copied'); }, 3000);
+    }).catch(() => {
+      const ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); document.body.removeChild(ta);
+    });
+  }
+</script>
+</body>
+</html>
