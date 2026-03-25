@@ -55,7 +55,7 @@ jobs:
                   "rich_text": [{ "text": { "content": $shiji } }]
                 },
                 "Status": {
-                  "multi_select": [{ "name": "Ready" }]
+                  "select": { "name": "Ready" }
                 }
               }
             }')

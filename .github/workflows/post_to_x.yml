@@ -45,8 +45,8 @@ jobs:
           query_payload = {
               "filter": {
                   "property": "Status",
-                  "multi_select": {
-                      "contains": "Ready"
+                  "select": {
+                      "equals": "Ready"
                   }
               }
           }
@@ -109,7 +109,7 @@ jobs:
           update_payload = {
               "properties": {
                   "Status": {
-                      "multi_select": [{"name": "Posted"}]
+                      "select": {"name": "Posted"}
                   }
               }
           }
