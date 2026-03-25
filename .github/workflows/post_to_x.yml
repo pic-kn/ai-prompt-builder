@@ -97,7 +97,7 @@ jobs:
           )
 
           try:
-              response = client.create_tweet(text=tweet)
+              response = client.create_tweet(text=tweet, user_auth=True)
               print(f"Tweet posted successfully! ID: {response.data['id']}")
           except tweepy.TweepyException as e:
               print(f"Failed to post to X: {e}")
