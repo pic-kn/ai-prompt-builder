@@ -1,0 +1,125 @@
+name: Post to X (Daily 20:00 JST)
+
+on:
+  schedule:
+    - cron: '0 11 * * *'  # 11:00 UTC = 20:00 JST
+  workflow_dispatch:       # 手動実行も可能
+
+jobs:
+  post-to-x:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Post Notion Ready items to X
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+          X_API_KEY: ${{ secrets.X_API_KEY }}
+          X_API_SECRET: ${{ secrets.X_API_SECRET }}
+          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+          X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
+        run: |
+          pip install requests requests-oauthlib -q
+
+          python3 << 'EOF'
+          import os
+          import json
+          import requests
+          from requests_oauthlib import OAuth1
+
+          NOTION_API_KEY = os.environ["NOTION_API_KEY"]
+          NOTION_DATABASE_ID = os.environ["NOTION_DATABASE_ID"]
+          X_API_KEY = os.environ["X_API_KEY"]
+          X_API_SECRET = os.environ["X_API_SECRET"]
+          X_ACCESS_TOKEN = os.environ["X_ACCESS_TOKEN"]
+          X_ACCESS_TOKEN_SECRET = os.environ["X_ACCESS_TOKEN_SECRET"]
+
+          notion_headers = {
+              "Authorization": f"Bearer {NOTION_API_KEY}",
+              "Content-Type": "application/json",
+              "Notion-Version": "2022-06-28"
+          }
+
+          # Notionから Status=Ready のページを取得
+          query_url = f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query"
+          query_payload = {
+              "filter": {
+                  "property": "Status",
+                  "multi_select": {
+                      "contains": "Ready"
+                  }
+              }
+          }
+
+          res = requests.post(query_url, headers=notion_headers, json=query_payload)
+          data = res.json()
+
+          if res.status_code != 200:
+              print(f"Notion query error: {data}")
+              exit(1)
+
+          pages = data.get("results", [])
+          print(f"Found {len(pages)} Ready items")
+
+          if not pages:
+              print("No Ready items found. Skipping.")
+              exit(0)
+
+          # 最初の1件を投稿
+          page = pages[0]
+          page_id = page["id"]
+          props = page["properties"]
+
+          def get_text(prop):
+              items = prop.get("title") or prop.get("rich_text") or []
+              return "".join([t["text"]["content"] for t in items if "text" in t])
+
+          kadai = get_text(props.get("課題", {}))
+          kaiketsu = get_text(props.get("解決", {}))
+          shiji = get_text(props.get("指示", {}))
+
+          print(f"課題: {kadai}")
+          print(f"解決: {kaiketsu}")
+          print(f"指示: {shiji}")
+
+          # ツイート本文を組み立て（280文字以内に収める）
+          tweet = f"【課題】{kadai}\n\n【解決】{kaiketsu}\n\n💡AIへの指示：{shiji}\n\n#Claude #AI開発 #BuildInPublic"
+          if len(tweet) > 280:
+              tweet = tweet[:277] + "..."
+
+          print(f"Tweet ({len(tweet)} chars):\n{tweet}")
+
+          # X に投稿
+          auth = OAuth1(X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET)
+          x_res = requests.post(
+              "https://api.twitter.com/2/tweets",
+              auth=auth,
+              json={"text": tweet}
+          )
+
+          print(f"X API status: {x_res.status_code}")
+          print(f"X API response: {x_res.text}")
+
+          if x_res.status_code not in [200, 201]:
+              print("Failed to post to X")
+              exit(1)
+
+          # Notion の Status を Posted に更新
+          update_url = f"https://api.notion.com/v1/pages/{page_id}"
+          update_payload = {
+              "properties": {
+                  "Status": {
+                      "multi_select": [{"name": "Posted"}]
+                  }
+              }
+          }
+          update_res = requests.patch(update_url, headers=notion_headers, json=update_payload)
+          print(f"Notion update status: {update_res.status_code}")
+
+          if update_res.status_code == 200:
+              print("Successfully posted to X and updated Notion to Posted!")
+          else:
+              print(f"Notion update failed: {update_res.text}")
+              exit(1)
+
+          EOF
