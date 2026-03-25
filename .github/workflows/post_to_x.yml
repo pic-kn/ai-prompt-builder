@@ -19,13 +19,12 @@ jobs:
           X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
           X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
         run: |
-          pip install requests requests-oauthlib -q
+          pip install requests tweepy -q
 
           python3 << 'EOF'
           import os
-          import json
           import requests
-          from requests_oauthlib import OAuth1
+          import tweepy
 
           NOTION_API_KEY = os.environ["NOTION_API_KEY"]
           NOTION_DATABASE_ID = os.environ["NOTION_DATABASE_ID"]
@@ -89,19 +88,19 @@ jobs:
 
           print(f"Tweet ({len(tweet)} chars):\n{tweet}")
 
-          # X に投稿
-          auth = OAuth1(X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET)
-          x_res = requests.post(
-              "https://api.twitter.com/2/tweets",
-              auth=auth,
-              json={"text": tweet}
+          # X に投稿（tweepy使用）
+          client = tweepy.Client(
+              consumer_key=X_API_KEY,
+              consumer_secret=X_API_SECRET,
+              access_token=X_ACCESS_TOKEN,
+              access_token_secret=X_ACCESS_TOKEN_SECRET
           )
 
-          print(f"X API status: {x_res.status_code}")
-          print(f"X API response: {x_res.text}")
-
-          if x_res.status_code not in [200, 201]:
-              print("Failed to post to X")
+          try:
+              response = client.create_tweet(text=tweet)
+              print(f"Tweet posted successfully! ID: {response.data['id']}")
+          except tweepy.TweepyException as e:
+              print(f"Failed to post to X: {e}")
               exit(1)
 
           # Notion の Status を Posted に更新
