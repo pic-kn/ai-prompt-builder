@@ -24,6 +24,7 @@ jobs:
 
           python3 << 'PYEOF'
           import os
+          import unicodedata
           import requests
           import tweepy
           from google import genai
@@ -36,6 +37,28 @@ jobs:
           X_ACCESS_TOKEN = os.environ["X_ACCESS_TOKEN"]
           X_ACCESS_TOKEN_SECRET = os.environ["X_ACCESS_TOKEN_SECRET"]
           GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
+
+          def tweet_length(text):
+              """X\u306e\u6587\u5b57\u6570\u3092\u6b63\u78ba\u306b\u30ab\u30a6\u30f3\u30c8\uff08CJK\u6587\u5b57=2\u3001\u305d\u306e\u4ed6=1\uff09"""
+              count = 0
+              for c in text:
+                  if unicodedata.east_asian_width(c) in ('W', 'F'):
+                      count += 2
+                  else:
+                      count += 1
+              return count
+
+          def truncate_tweet(text, limit=280):
+              result = ""
+              count = 0
+              for c in text:
+                  w = 2 if unicodedata.east_asian_width(c) in ('W', 'F') else 1
+                  if count + w > limit - 3:
+                      result += "..."
+                      break
+                  result += c
+                  count += w
+              return result
 
           notion_headers = {
               "Authorization": f"Bearer {NOTION_API_KEY}",
@@ -84,18 +107,24 @@ jobs:
           gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 
           prompt = (
-              "\u4ee5\u4e0b\u306e\u958b\u767a\u9032\u6357\u60c5\u5831\u3092\u3001\u81ea\u7136\u306a\u53e3\u8a9e\u8abf\u306e\u30c4\u30a4\u30fc\u30c8\u306b\u5909\u63db\u3057\u3066\u304f\u3060\u3055\u3044\u3002\n\n"
-              "\u6761\u4ef6\uff1a\n"
-              "- \u6280\u8853\u7528\u8a9e\u306f\u8aa4\u89e3\u306a\u304f\u4f1d\u308f\u308b\u5e73\u6613\u306a\u8a00\u8449\u306b\u8a00\u3044\u63db\u3048\u308b\n"
-              "- \u4f55\u3092AI\u306b\u983c\u3093\u3060\u304b\u3092\u5177\u4f53\u7684\u306b1\u884c\u3067\u793a\u3059\n"
-              "- \u904e\u5270\u306a\u611f\u5606\u7b26\u3084\u7d75\u6587\u5b57\u306f\u4f7f\u308f\u306a\u3044\u3002\u5fc5\u8981\u306a\u3089\u6700\u5c0f\u9650\u306b\u6296\u3048\u308b\n"
-              "- \u8aad\u3093\u3060\u4eba\u304c\u540c\u3058\u60a9\u307f\u3092\u6301\u3063\u3066\u3044\u305f\u3089\u53c2\u8003\u306b\u306a\u308b\u3001\u843d\u3061\u7740\u3044\u305f\u30c8\u30fc\u30f3\u3067\n"
-              "- \u5168\u4f53\u3067200\u6587\u5b57\u4ee5\u5185\u306b\u53ce\u3081\u308b\n"
-              "- \u30cf\u30c3\u30b7\u30e5\u30bf\u30b0\u306f\u542b\u3081\u306a\u3044\n\n"
+              "\u4ee5\u4e0b\u306e\u958b\u767a\u9032\u6357\u60c5\u5831\u3092\u3001\u30c4\u30a4\u30fc\u30c82\u6295\u7a3f\u5206\u306e\u30c6\u30ad\u30b9\u30c8\u3092\u751f\u6210\u3057\u3066\u304f\u3060\u3055\u3044\u3002\n\n"
+              "[\u30c4\u30a4\u30fc\u30c81\uff1a\u4e00\u822c\u5411\u3051]\n"
+              "- \u6280\u8853\u7528\u8a9e\u3092\u4f7f\u308f\u305a\u3001\u8ab0\u304c\u8aad\u3093\u3067\u3082\u308f\u304b\u308b\u8a00\u8449\u3067\n"
+              "- \u540c\u3058\u60a9\u307f\u3092\u6301\u3064\u4eba\u306b\u53c2\u8003\u306b\u306a\u308b\u3001\u843d\u3061\u7740\u3044\u305f\u30c8\u30fc\u30f3\u3067\n"
+              "- \u904e\u5270\u306a\u611f\u5606\u7b26\u3084\u7d75\u6587\u5b57\u306f\u4f7f\u308f\u306a\u3044\n"
+              "- \u65e5\u672c\u8a9e140\u5b57\u4ee5\u5185\uff08\u534a\u89d2280\u5b57\u76f8\u5f53\uff09\n\n"
+              "[\u30c4\u30a4\u30fc\u30c82\uff1a\u6280\u8853\u30ea\u30d7\u30e9\u30a4]\n"
+              "- \u5177\u4f53\u7684\u306aAI\u3078\u306e\u6307\u793a\u5185\u5bb9\u3084\u5b9f\u88c5\u65b9\u6cd5\u3092\u8a18\u8f09\n"
+              "- \u771f\u4f3c\u3057\u305f\u3044\u4eba\u304c\u305d\u306e\u307e\u307e\u4f7f\u3048\u308b\u5177\u4f53\u6027\u3067\n"
+              "- \u65e5\u672c\u8a9e140\u5b57\u4ee5\u5185\uff08\u534a\u89d2280\u5b57\u76f8\u5f53\uff09\n\n"
+              "\u4ee5\u4e0b\u306e\u5f62\u5f0f\u3067\u51fa\u529b\u3057\u3066\u304f\u3060\u3055\u3044\uff08\u4ed6\u306e\u6587\u5b57\u306f\u4e0d\u8981\uff09\uff1a\n"
+              "TWEET1:\n"
+              "(\u30c4\u30a4\u30fc\u30c81\u306e\u30c6\u30ad\u30b9\u30c8)\n"
+              "TWEET2:\n"
+              "(\u30c4\u30a4\u30fc\u30c82\u306e\u30c6\u30ad\u30b9\u30c8)\n\n"
               f"\u8ab2\u984c\uff1a{kadai}\n"
               f"\u89e3\u6c7a\uff1a{kaiketsu}\n"
-              f"AI\u3078\u306e\u6307\u793a\uff1a{shiji}\n\n"
-              "\u30c4\u30a4\u30fc\u30c8\u672c\u6587\u306e\u307f\u51fa\u529b\u3057\u3066\u304f\u3060\u3055\u3044\u3002"
+              f"AI\u3078\u306e\u6307\u793a\uff1a{shiji}"
           )
 
           response = gemini_client.models.generate_content(
@@ -103,12 +132,24 @@ jobs:
               contents=prompt,
               config=types.GenerateContentConfig(thinking_config=types.ThinkingConfig(thinking_budget=0))
           )
-          tweet = response.text.strip()
+          output = response.text.strip()
+          print(f"Gemini output:\n{output}")
 
-          if len(tweet) > 280:
-              tweet = tweet[:277] + "..."
+          tweet1 = ""
+          tweet2 = ""
+          if "TWEET1:" in output and "TWEET2:" in output:
+              parts = output.split("TWEET2:")
+              tweet1 = parts[0].replace("TWEET1:", "").strip()
+              tweet2 = parts[1].strip()
+          else:
+              tweet1 = output[:140]
+              tweet2 = ""
 
-          print(f"Final tweet ({len(tweet)} chars):\n{tweet}")
+          tweet1 = truncate_tweet(tweet1)
+          tweet2 = truncate_tweet(tweet2)
+
+          print(f"Tweet1 ({tweet_length(tweet1)} weighted chars):\n{tweet1}")
+          print(f"Tweet2 ({tweet_length(tweet2)} weighted chars):\n{tweet2}")
 
           x_client = tweepy.Client(
               consumer_key=X_API_KEY,
@@ -118,8 +159,18 @@ jobs:
           )
 
           try:
-              response = x_client.create_tweet(text=tweet, user_auth=True)
-              print(f"Tweet posted! ID: {response.data['id']}")
+              res1 = x_client.create_tweet(text=tweet1, user_auth=True)
+              tweet1_id = res1.data["id"]
+              print(f"Tweet1 posted! ID: {tweet1_id}")
+
+              if tweet2:
+                  res2 = x_client.create_tweet(
+                      text=tweet2,
+                      reply={"in_reply_to_tweet_id": tweet1_id},
+                      user_auth=True
+                  )
+                  print(f"Tweet2 (reply) posted! ID: {res2.data['id']}")
+
           except tweepy.TweepyException as e:
               print(f"Failed to post to X: {e}")
               exit(1)
