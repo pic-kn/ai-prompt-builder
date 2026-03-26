@@ -18,14 +18,15 @@ jobs:
           X_API_SECRET: ${{ secrets.X_API_SECRET }}
           X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
           X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          pip install requests tweepy -q
+          pip install requests tweepy anthropic -q
 
           python3 << 'EOF'
           import os
           import requests
           import tweepy
-          import re
+          import anthropic
 
           NOTION_API_KEY = os.environ["NOTION_API_KEY"]
           NOTION_DATABASE_ID = os.environ["NOTION_DATABASE_ID"]
@@ -33,6 +34,7 @@ jobs:
           X_API_SECRET = os.environ["X_API_SECRET"]
           X_ACCESS_TOKEN = os.environ["X_ACCESS_TOKEN"]
           X_ACCESS_TOKEN_SECRET = os.environ["X_ACCESS_TOKEN_SECRET"]
+          ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
 
           notion_headers = {
               "Authorization": f"Bearer {NOTION_API_KEY}",
@@ -40,14 +42,12 @@ jobs:
               "Notion-Version": "2022-06-28"
           }
 
-          # Notionから Status=Ready のページを取得
+          # NotionからStatus=ReadyのページをFetch
           query_url = f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query"
           query_payload = {
               "filter": {
                   "property": "Status",
-                  "select": {
-                      "equals": "Ready"
-                  }
+                  "select": {"equals": "Ready"}
               }
           }
 
@@ -65,7 +65,6 @@ jobs:
               print("No Ready items found. Skipping.")
               exit(0)
 
-          # 最初の1件を投稿
           page = pages[0]
           page_id = page["id"]
           props = page["properties"]
@@ -79,7 +78,7 @@ jobs:
           shiji = get_text(props.get("指示", {}))
           repo_full = get_text(props.get("リポジトリ", {}))
 
-          # リポジトリ名だけ取り出してハッシュタグ化（例: pic-kn/presetry → #presetry）
+          import re
           repo_name = repo_full.split("/")[-1] if repo_full else ""
           repo_tag = "#" + re.sub(r"[^a-zA-Z0-9_]", "_", repo_name) if repo_name else ""
 
@@ -88,18 +87,47 @@ jobs:
           print(f"指示: {shiji}")
           print(f"リポジトリタグ: {repo_tag}")
 
-          # ツイート本文を組み立て（280文字以内に収める）
+          # Claude APIでツイート文章を生成
+          claude = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+
+          prompt = f"""以下の開発進捗情報を、誰が読んでもわかりやすく、真似してみたいと思えるようなツイートに変換してください。
+
+条件：
+- 技術用語は平易な言葉に言い換える
+- 何をAIに頼んだかを具体的に一言で示す
+- 絵文字を適度に使って読みやすくする
+- 全体で200文字以内に収める
+- ハッシュタグは含めない（後で自動追加します）
+
+---
+課題：{kadai}
+解決：{kaiketsu}
+AIへの指示：{shiji}
+---
+
+ツイート本文のみ出力してください。"""
+
+          message = claude.messages.create(
+              model="claude-haiku-4-5-20251001",
+              max_tokens=300,
+              messages=[{"role": "user", "content": prompt}]
+          )
+
+          tweet_body = message.content[0].text.strip()
+          print(f"Generated tweet body:\n{tweet_body}")
+
+          # ハッシュタグを追加
           tags = f"#Claude #AI開発 #BuildInPublic"
           if repo_tag:
               tags += f" {repo_tag}"
 
-          tweet = f"【課題】{kadai}\n\n【解決】{kaiketsu}\n\n💡AIへの指示：{shiji}\n\n{tags}"
+          tweet = f"{tweet_body}\n\n{tags}"
           if len(tweet) > 280:
               tweet = tweet[:277] + "..."
 
-          print(f"Tweet ({len(tweet)} chars):\n{tweet}")
+          print(f"Final tweet ({len(tweet)} chars):\n{tweet}")
 
-          # X に投稿（tweepy使用）
+          # Xに投稿
           client = tweepy.Client(
               consumer_key=X_API_KEY,
               consumer_secret=X_API_SECRET,
@@ -114,13 +142,11 @@ jobs:
               print(f"Failed to post to X: {e}")
               exit(1)
 
-          # Notion の Status を Posted に更新
+          # NotionのStatusをPostedに更新
           update_url = f"https://api.notion.com/v1/pages/{page_id}"
           update_payload = {
               "properties": {
-                  "Status": {
-                      "select": {"name": "Posted"}
-                  }
+                  "Status": {"select": {"name": "Posted"}}
               }
           }
           update_res = requests.patch(update_url, headers=notion_headers, json=update_payload)
