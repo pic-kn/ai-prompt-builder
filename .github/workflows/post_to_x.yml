@@ -135,27 +135,16 @@ jobs:
           )
           tweet1 = truncate_tweet(res1.text.strip())
 
-          # Tweet2: \u30ea\u30d7\u30e9\u30a4\uff08\u539f\u56e0\u30fb\u5177\u4f53\u7684\u5bfe\u5fdc\u30fb\u624b\u4f5c\u696d\uff09
-          prompt2 = (
-              "\u4ee5\u4e0b\u306e\u958b\u767a\u5185\u5bb9\u306e\u8a73\u7d30\u3092\u3001\u30ea\u30d7\u30e9\u30a4\u6295\u7a3f\u306e\u5f62\u5f0f\u3067\u66f8\u3044\u3066\u304f\u3060\u3055\u3044\u3002\n\n"
-              "\u5f62\u5f0f\uff1a\n"
-              f"\u300e\u304b\u3044\u3055\u3093\u304b\u3089\u3082\u3089\u3063\u305f\u30d7\u30ed\u30f3\u30d7\u30c8\u2193\n\u300e{shiji}\u300f\u300f\u3092\u6700\u521d\u306b\u66f8\u304f\n"
-              "\u305d\u306e\u5f8c\u3001\u4ee5\u4e0b\u306e\u5185\u5bb9\u3092\u5177\u4f53\u7684\u306b\u300f\n"
-              "\u300e\u539f\u56e0\uff1a\u4f55\u304c\u8d77\u304d\u3066\u3044\u305f\u304b\uff08\u6280\u8853\u7684\u306a\u539f\u56e0\u3092\u5e73\u6613\u306b\uff09\u300f\n"
-              "\u300e\u5bfe\u5fdc\uff1a\u5177\u4f53\u7684\u306b\u4f55\u3092\u3069\u3046\u5909\u3048\u305f\u304b\u300f\n"
-              f"{'\u300e\u304b\u3044\u3055\u3093\u304c\u624b\u52d5\u3067\u3084\u3063\u305f\u3053\u3068\u2193\n' + tejigyo + '\u300f' if tejigyo and tejigyo != '\u306a\u3057' else '\u300e\u304b\u3044\u3055\u3093\u304c\u624b\u52d5\u3067\u3084\u3063\u305f\u3053\u3068\uff1a\u306a\u3057\u300f'}\n\n"
-              "\u6761\u4ef6\uff1a\n"
-              "- \u4e8b\u5b9f\u306e\u307f\u3092\u66f8\u304f\u3002\u6280\u8853\u7684\u306a\u6539\u5584\u3092\u8af8\u8a9e\u5f53\u305f\u308a\u306b\u3057\u306a\u3044\n"
-              "- \u65e5\u672c\u8a9e140\u5b57\u4ee5\u5185\n"
-              "- \u672c\u6587\u306e\u307f\u51fa\u529b"
+          # Tweet2: Gemini不使用 - 事実のみをそのまま記載
+          te_line = ("\u624b\u4f5c\u696d\uff1a" + tejigyo) if tejigyo and tejigyo != "\u306a\u3057" else "\u624b\u4f5c\u696d\uff1a\u306a\u3057"
+          tweet2_raw = (
+              "\u304b\u3044\u3055\u3093\u304b\u3089\u3082\u3089\u3063\u305f\u30d7\u30ed\u30f3\u30d7\u30c8\u2193\n"
+              + shiji + "\n\n"
+              + "\u539f\u56e0\uff1a" + kadai + "\n"
+              + "\u5bfe\u5fdc\uff1a" + kaiketsu + "\n"
+              + te_line
           )
-
-          res2 = gemini_client.models.generate_content(
-              model="gemini-2.5-flash",
-              contents=prompt2,
-              config=types.GenerateContentConfig(thinking_config=types.ThinkingConfig(thinking_budget=0))
-          )
-          tweet2 = truncate_tweet(res2.text.strip())
+          tweet2 = truncate_tweet(tweet2_raw)
 
           print(f"Tweet1 ({tweet_length(tweet1)} weighted chars):\n{tweet1}")
           print(f"Tweet2 ({tweet_length(tweet2)} weighted chars):\n{tweet2}")
