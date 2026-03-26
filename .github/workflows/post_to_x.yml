@@ -2,8 +2,8 @@ name: Post to X (Daily 20:00 JST)
 
 on:
   schedule:
-    - cron: '0 11 * * *'  # 11:00 UTC = 20:00 JST
-  workflow_dispatch:       # 手動実行も可能
+    - cron: '0 11 * * *'
+  workflow_dispatch:
 
 jobs:
   post-to-x:
@@ -22,8 +22,9 @@ jobs:
         run: |
           pip install requests tweepy anthropic -q
 
-          python3 << 'EOF'
+          python3 << 'PYEOF'
           import os
+          import re
           import requests
           import tweepy
           import anthropic
@@ -42,7 +43,6 @@ jobs:
               "Notion-Version": "2022-06-28"
           }
 
-          # NotionからStatus=ReadyのページをFetch
           query_url = f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query"
           query_payload = {
               "filter": {
@@ -73,51 +73,45 @@ jobs:
               items = prop.get("title") or prop.get("rich_text") or []
               return "".join([t["text"]["content"] for t in items if "text" in t])
 
-          kadai = get_text(props.get("課題", {}))
-          kaiketsu = get_text(props.get("解決", {}))
-          shiji = get_text(props.get("指示", {}))
-          repo_full = get_text(props.get("リポジトリ", {}))
+          kadai = get_text(props.get("\u8ab2\u984c", {}))
+          kaiketsu = get_text(props.get("\u89e3\u6c7a", {}))
+          shiji = get_text(props.get("\u6307\u793a", {}))
+          repo_full = get_text(props.get("\u30ea\u30dd\u30b8\u30c8\u30ea", {}))
 
-          import re
           repo_name = repo_full.split("/")[-1] if repo_full else ""
           repo_tag = "#" + re.sub(r"[^a-zA-Z0-9_]", "_", repo_name) if repo_name else ""
 
-          print(f"課題: {kadai}")
-          print(f"解決: {kaiketsu}")
-          print(f"指示: {shiji}")
-          print(f"リポジトリタグ: {repo_tag}")
+          print(f"\u8ab2\u984c: {kadai}")
+          print(f"\u89e3\u6c7a: {kaiketsu}")
+          print(f"\u6307\u793a: {shiji}")
+          print(f"repo_tag: {repo_tag}")
 
-          # Claude APIでツイート文章を生成
-          claude = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+          claude_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
-          prompt = f"""以下の開発進捗情報を、誰が読んでもわかりやすく、真似してみたいと思えるようなツイートに変換してください。
+          prompt = (
+              "\u4ee5\u4e0b\u306e\u958b\u767a\u9032\u6357\u60c5\u5831\u3092\u3001\u8ab2\u984c\u3068\u89e3\u6c7a\u3092\u30b7\u30f3\u30d7\u30eb\u306b\u4f1a\u8a71\u8abf\u3067\u4f1d\u3048\u308b\u30c4\u30a4\u30fc\u30c8\u306b\u5909\u63db\u3057\u3066\u304f\u3060\u3055\u3044\u3002\n\n"
+              "\u6761\u4ef6\uff1a\n"
+              "- \u6280\u8853\u7528\u8a9e\u306f\u5e73\u6613\u306a\u8a00\u8449\u306b\u8a00\u3044\u63db\u3048\u308b\n"
+              "- \u4f55\u3092AI\u306b\u983c\u3093\u3060\u304b\u3092\u5177\u4f53\u7684\u306b1\u884c\u3067\u793a\u3059\n"
+              "- \u7d75\u6587\u5b57\u3092\u9069\u5ea6\u306b\u4f7f\u3063\u3066\u8aad\u307f\u3084\u3059\u304f\u3059\u308b\n"
+              "- \u5168\u4f53\u3067200\u6587\u5b57\u4ee5\u5185\u306b\u53ce\u3081\u308b\n"
+              "- \u30cf\u30c3\u30b7\u30e5\u30bf\u30b0\u306f\u542b\u3081\u306a\u3044\n\n"
+              f"\u8ab2\u984c\uff1a{kadai}\n"
+              f"\u89e3\u6c7a\uff1a{kaiketsu}\n"
+              f"AI\u3078\u306e\u6307\u793a\uff1a{shiji}\n\n"
+              "\u30c4\u30a4\u30fc\u30c8\u672c\u6587\u306e\u307f\u51fa\u529b\u3057\u3066\u304f\u3060\u3055\u3044\u3002"
+          )
 
-条件：
-- 技術用語は平易な言葉に言い換える
-- 何をAIに頼んだかを具体的に一言で示す
-- 絵文字を適度に使って読みやすくする
-- 全体で200文字以内に収める
-- ハッシュタグは含めない（後で自動追加します）
-
----
-課題：{kadai}
-解決：{kaiketsu}
-AIへの指示：{shiji}
----
-
-ツイート本文のみ出力してください。"""
-
-          message = claude.messages.create(
+          message = claude_client.messages.create(
               model="claude-haiku-4-5-20251001",
               max_tokens=300,
               messages=[{"role": "user", "content": prompt}]
           )
 
           tweet_body = message.content[0].text.strip()
-          print(f"Generated tweet body:\n{tweet_body}")
+          print(f"Generated tweet:\n{tweet_body}")
 
-          # ハッシュタグを追加
-          tags = f"#Claude #AI開発 #BuildInPublic"
+          tags = "#Claude #AI\u958b\u767a #BuildInPublic"
           if repo_tag:
               tags += f" {repo_tag}"
 
@@ -127,7 +121,6 @@ AIへの指示：{shiji}
 
           print(f"Final tweet ({len(tweet)} chars):\n{tweet}")
 
-          # Xに投稿
           client = tweepy.Client(
               consumer_key=X_API_KEY,
               consumer_secret=X_API_SECRET,
@@ -137,12 +130,11 @@ AIへの指示：{shiji}
 
           try:
               response = client.create_tweet(text=tweet, user_auth=True)
-              print(f"Tweet posted successfully! ID: {response.data['id']}")
+              print(f"Tweet posted! ID: {response.data['id']}")
           except tweepy.TweepyException as e:
               print(f"Failed to post to X: {e}")
               exit(1)
 
-          # NotionのStatusをPostedに更新
           update_url = f"https://api.notion.com/v1/pages/{page_id}"
           update_payload = {
               "properties": {
@@ -150,7 +142,6 @@ AIへの指示：{shiji}
               }
           }
           update_res = requests.patch(update_url, headers=notion_headers, json=update_payload)
-          print(f"Notion update status: {update_res.status_code}")
 
           if update_res.status_code == 200:
               print("Successfully posted to X and updated Notion to Posted!")
@@ -158,4 +149,4 @@ AIへの指示：{shiji}
               print(f"Notion update failed: {update_res.text}")
               exit(1)
 
-          EOF
+          PYEOF
