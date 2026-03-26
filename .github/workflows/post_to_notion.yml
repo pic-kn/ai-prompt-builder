@@ -25,20 +25,16 @@ jobs:
           echo "Commit message:"
           echo "$COMMIT_MSG"
 
-          KADAI=$(echo "$COMMIT_MSG" | grep -oP '(?<=【課題】)[^
-【]*' | head -1 | xargs)
-          KAIKETSU=$(echo "$COMMIT_MSG" | grep -oP '(?<=【解決】)[^
-【]*' | head -1 | xargs)
-          SHIJI=$(echo "$COMMIT_MSG" | grep -oP '(?<=【指示】)[^
-【]*' | head -1 | xargs)
-          TEJIGYO=$(echo "$COMMIT_MSG" | grep -oP '(?<=【手作業】)[^
-【]*' | head -1 | xargs)
+          KADAI=$(echo "$COMMIT_MSG" | grep -oP '(?<=\u3010\u8ab2\u984c\u3011)[^\n\u3010]*' | head -1 | xargs)
+          KAIKETSU=$(echo "$COMMIT_MSG" | grep -oP '(?<=\u3010\u89e3\u6c7a\u3011)[^\n\u3010]*' | head -1 | xargs)
+          SHIJI=$(echo "$COMMIT_MSG" | grep -oP '(?<=\u3010\u6307\u793a\u3011)[^\n\u3010]*' | head -1 | xargs)
+          TEJIGYO=$(echo "$COMMIT_MSG" | grep -oP '(?<=\u3010\u624b\u4f5c\u696d\u3011)[^\n\u3010]*' | head -1 | xargs)
 
-          echo "課題: $KADAI"
-          echo "解決: $KAIKETSU"
-          echo "指示: $SHIJI"
-          echo "手作業: $TEJIGYO"
-          echo "リポジトリ: $REPO_NAME"
+          echo "\u8ab2\u984c: $KADAI"
+          echo "\u89e3\u6c7a: $KAIKETSU"
+          echo "\u6307\u793a: $SHIJI"
+          echo "\u624b\u4f5c\u696d: $TEJIGYO"
+          echo "\u30ea\u30dd\u30b8\u30c8\u30ea: $REPO_NAME"
 
           if [ -z "$KADAI" ] || [ -z "$KAIKETSU" ] || [ -z "$SHIJI" ]; then
             echo "Required fields not found in commit message. Skipping Notion post."
@@ -46,7 +42,7 @@ jobs:
           fi
 
           if [ -z "$TEJIGYO" ]; then
-            TEJIGYO="なし"
+            TEJIGYO="\u306a\u3057"
           fi
 
           PAYLOAD=$(jq -n \
@@ -59,19 +55,19 @@ jobs:
             '{
               "parent": { "database_id": $db },
               "properties": {
-                "課題": {
+                "\u8ab2\u984c": {
                   "title": [{ "text": { "content": $kadai } }]
                 },
-                "解決": {
+                "\u89e3\u6c7a": {
                   "rich_text": [{ "text": { "content": $kaiketsu } }]
                 },
-                "指示": {
+                "\u6307\u793a": {
                   "rich_text": [{ "text": { "content": $shiji } }]
                 },
-                "手作業": {
+                "\u624b\u4f5c\u696d": {
                   "rich_text": [{ "text": { "content": $tejigyo } }]
                 },
-                "リポジトリ": {
+                "\u30ea\u30dd\u30b8\u30c8\u30ea": {
                   "rich_text": [{ "text": { "content": $repo } }]
                 },
                 "Status": {
