@@ -21,10 +21,6 @@ jobs:
           NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
           REPO_NAME: ${{ github.repository }}
         run: |
-          COMMIT_MSG=$(git log -1 --pretty=%B)
-          echo "Commit message:"
-          echo "$COMMIT_MSG"
-
           python3 << 'PYEOF'
           import os
           import re
@@ -37,22 +33,25 @@ jobs:
 
           result = subprocess.run(["git", "log", "-1", "--pretty=%B"], capture_output=True, text=True)
           commit_msg = result.stdout.strip()
+          print(f"Commit message: {commit_msg}")
 
           def extract(tag, text):
               m = re.search(f"(?<={tag})[^\n\u3010\u300e\u300f]*", text)
               return m.group(0).strip() if m else ""
 
+          project = extract("\u3010\u30d7\u30ed\u30b8\u30a7\u30af\u30c8\u3011", commit_msg)
           kadai = extract("\u3010\u8ab2\u984c\u3011", commit_msg)
           kaiketsu = extract("\u3010\u89e3\u6c7a\u3011", commit_msg)
           shiji = extract("\u3010\u6307\u793a\u3011", commit_msg)
           tejigyo = extract("\u3010\u624b\u4f5c\u696d\u3011", commit_msg) or "\u306a\u3057"
 
+          print(f"\u30d7\u30ed\u30b8\u30a7\u30af\u30c8: {project}")
           print(f"\u8ab2\u984c: {kadai}")
           print(f"\u89e3\u6c7a: {kaiketsu}")
           print(f"\u6307\u793a: {shiji}")
           print(f"\u624b\u4f5c\u696d: {tejigyo}")
 
-          if not kadai or not kaiketsu or not shiji:
+          if not kadai or not kaiketsu or not shiji or not project:
               print("Required fields not found. Skipping.")
               exit(0)
 
@@ -69,6 +68,7 @@ jobs:
                   "\u89e3\u6c7a": {"rich_text": [{"text": {"content": kaiketsu}}]},
                   "\u6307\u793a": {"rich_text": [{"text": {"content": shiji}}]},
                   "\u624b\u4f5c\u696d": {"rich_text": [{"text": {"content": tejigyo}}]},
+                  "\u30d7\u30ed\u30b8\u30a7\u30af\u30c8": {"rich_text": [{"text": {"content": project}}]},
                   "\u30ea\u30dd\u30b8\u30c8\u30ea": {"rich_text": [{"text": {"content": REPO_NAME}}]},
                   "Status": {"select": {"name": "Ready"}}
               }

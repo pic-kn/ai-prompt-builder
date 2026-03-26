@@ -65,7 +65,7 @@ jobs:
               "Notion-Version": "2022-06-28"
           }
 
-          # Posted件数を取得して連番を決める
+          # Posted\u4ef6\u6570\u3092\u53d6\u5f97\u3057\u3066\u9023\u756a\u3092\u6c7a\u3081\u308b
           count_res = requests.post(
               f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query",
               headers=notion_headers,
@@ -73,9 +73,8 @@ jobs:
           )
           posted_count = len(count_res.json().get("results", []))
           number = posted_count + 1
-          print(f"\u9023番: #{number}")
 
-          # Readyのページを取得
+          # Ready\u306e\u30da\u30fc\u30b8\u3092\u53d6\u5f97
           res = requests.post(
               f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query",
               headers=notion_headers,
@@ -102,48 +101,61 @@ jobs:
               items = prop.get("title") or prop.get("rich_text") or []
               return "".join([t["text"]["content"] for t in items if "text" in t])
 
+          project = get_text(props.get("\u30d7\u30ed\u30b8\u30a7\u30af\u30c8", {}))
           kadai = get_text(props.get("\u8ab2\u984c", {}))
           kaiketsu = get_text(props.get("\u89e3\u6c7a", {}))
           shiji = get_text(props.get("\u6307\u793a", {}))
           tejigyo = get_text(props.get("\u624b\u4f5c\u696d", {}))
 
-          print(f"\u8ab2\u984c: {kadai}")
-          print(f"\u89e3\u6c7a: {kaiketsu}")
-          print(f"\u6307\u793a: {shiji}")
-          print(f"\u624b\u4f5c\u696d: {tejigyo}")
-
           gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 
-          prompt = (
-              f"\u3042なたはGeminiです。開発者のかいさんの代わりに、AIとして開発進捗を投稿します。\n\n"
-              f"\u4ee5下の内容を元に、「かい(Gemini)です。」というスタンスで、AIが主語となって語る投稿文を作ってください。\n\n"
+          # Tweet1: \u4e00\u822c\u5411\u3051
+          prompt1 = (
+              f"\u3042\u306a\u305f\u306fAI\u3067\u3059\u3002\u958b\u767a\u8005\u306e\u304b\u3044\u3055\u3093\u306e\u4ee3\u308f\u308a\u306b\u3001AI\u3068\u3057\u3066\u958b\u767a\u9032\u6357\u3092\u6295\u7a3f\u3057\u307e\u3059\u3002\n\n"
+              "\u4ee5\u4e0b\u306e\u5185\u5bb9\u3092\u5143\u306b\u3001\u6295\u7a3f\u6587\u3092\u4f5c\u3063\u3066\u304f\u3060\u3055\u3044\u3002\n\n"
+              "\u5f62\u5f0f\uff1a\n"
+              f"1\u884c\u76ee: \u300e\u3010\u500b\u4eba\u958b\u767a\u30ed\u30b0 #{number}\u3011\u304b\u3044(AI)\u3067\u3059\u3002\u300f\u56fa\u5b9a\n"
+              f"2\u884c\u76ee: \u300e\u73fe\u5728\u4f5c\u3063\u3066\u3044\u308b\u3082\u306e\uff1a{project}\u300f\u3092\u81ea\u7136\u306a\u53e3\u8a9e\u8abf\u3067\n"
+              "3\u884c\u76ee\u4ee5\u964d: \u300e\u304b\u3044\u3055\u3093\u304b\u3089\u300e{\u30d7\u30ed\u30f3\u30d7\u30c8}\u300f\u3068\u8a00\u308f\u308c\u307e\u3057\u305f\u3002\u300f\u3092\u5165\u53e3\u306b\u3001\u300e\u4f55\u304c\u554f\u984c\u306a\u306e\u304b\u300f\u300e\u3069\u3046\u89e3\u6c7a\u3057\u305f\u304b\u300f\u300e\u7d50\u679c\u300f\u3092AI\u304c\u4e3b\u8a9e\u3067\u81ea\u7136\u306b\u8a9e\u308b\n\n"
               "\u6761\u4ef6\uff1a\n"
-              "- 1\u884c\u76ee\uff1a『【\u500b\u4eba\u958b\u767a\u30ed\u30b0 #』』 + 連番 + 『』の形式\n"
-              f"- 2\u884c\u76ee\uff1a『かい(Gemini)です。』固定\n"
-              "- 『今日は』から始まる1文で何をしたかを自然な口語調で\n"
-              "- 課題を誤解なく伝わる平易な言葉で説明\n"
-              "- 解決に至った結論を定型文で簡潔に\n"
-              "- 過剰な感嘆符や絵文字は使わない\n"
-              "- 日本語140字以内\n"
-              "- ハッシュタグは含めない\n\n"
-              f"\u9023番: {number}\n"
+              "- \u6280\u8853\u7528\u8a9e\u306f\u5177\u4f53\u7684\u306a\u56fa\u6709\u540d\u8a5e\uff08Notion\u3001GitHub\u7b49\uff09\u306f\u305d\u306e\u307e\u307e\u4f7f\u3044\u3001\u96e3\u3057\u3044\u8aac\u660e\u306f\u5e73\u6613\u306b\n"
+              "- \u904e\u5270\u306a\u611f\u5606\u7b26\u3084\u7d75\u6587\u5b57\u306f\u4f7f\u308f\u306a\u3044\n"
+              "- \u65e5\u672c\u8a9e140\u5b57\u4ee5\u5185\n"
+              "- \u30cf\u30c3\u30b7\u30e5\u30bf\u30b0\u306f\u542b\u3081\u306a\u3044\n"
+              "- \u672c\u6587\u306e\u307f\u51fa\u529b\n\n"
+              f"\u30d7\u30ed\u30f3\u30d7\u30c8: {shiji}\n"
               f"\u8ab2\u984c: {kadai}\n"
-              f"\u89e3\u6c7a: {kaiketsu}\n\n"
-              "\u6295\u7a3f\u6587\u672c\u306e\u307f\u51fa\u529b\u3057\u3066\u304f\u3060\u3055\u3044\u3002"
+              f"\u89e3\u6c7a: {kaiketsu}"
           )
 
-          response = gemini_client.models.generate_content(
+          res1 = gemini_client.models.generate_content(
               model="gemini-2.5-flash",
-              contents=prompt,
+              contents=prompt1,
               config=types.GenerateContentConfig(thinking_config=types.ThinkingConfig(thinking_budget=0))
           )
-          tweet1 = truncate_tweet(response.text.strip())
+          tweet1 = truncate_tweet(res1.text.strip())
 
-          # Tweet2: プロンプトと手作業をそのまま表示
-          tweet2_lines = [f"かいさんからもらったプロンプト↓\n\n「{shiji}」"]
-          if tejigyo and tejigyo != "なし":
-              tweet2_lines.append(f"\n\nかいさんが手動でやったこと↓\n\n{tejigyo}")
-          tweet2 = truncate_tweet("".join(tweet2_lines))
+          # Tweet2: \u30ea\u30d7\u30e9\u30a4\uff08\u539f\u56e0\u30fb\u5177\u4f53\u7684\u5bfe\u5fdc\u30fb\u624b\u4f5c\u696d\uff09
+          prompt2 = (
+              "\u4ee5\u4e0b\u306e\u958b\u767a\u5185\u5bb9\u306e\u8a73\u7d30\u3092\u3001\u30ea\u30d7\u30e9\u30a4\u6295\u7a3f\u306e\u5f62\u5f0f\u3067\u66f8\u3044\u3066\u304f\u3060\u3055\u3044\u3002\n\n"
+              "\u5f62\u5f0f\uff1a\n"
+              f"\u300e\u304b\u3044\u3055\u3093\u304b\u3089\u3082\u3089\u3063\u305f\u30d7\u30ed\u30f3\u30d7\u30c8\u2193\n\u300e{shiji}\u300f\u300f\u3092\u6700\u521d\u306b\u66f8\u304f\n"
+              "\u305d\u306e\u5f8c\u3001\u4ee5\u4e0b\u306e\u5185\u5bb9\u3092\u5177\u4f53\u7684\u306b\u300f\n"
+              "\u300e\u539f\u56e0\uff1a\u4f55\u304c\u8d77\u304d\u3066\u3044\u305f\u304b\uff08\u6280\u8853\u7684\u306a\u539f\u56e0\u3092\u5e73\u6613\u306b\uff09\u300f\n"
+              "\u300e\u5bfe\u5fdc\uff1a\u5177\u4f53\u7684\u306b\u4f55\u3092\u3069\u3046\u5909\u3048\u305f\u304b\u300f\n"
+              f"{'\u300e\u304b\u3044\u3055\u3093\u304c\u624b\u52d5\u3067\u3084\u3063\u305f\u3053\u3068\u2193\n' + tejigyo + '\u300f' if tejigyo and tejigyo != '\u306a\u3057' else '\u300e\u304b\u3044\u3055\u3093\u304c\u624b\u52d5\u3067\u3084\u3063\u305f\u3053\u3068\uff1a\u306a\u3057\u300f'}\n\n"
+              "\u6761\u4ef6\uff1a\n"
+              "- \u4e8b\u5b9f\u306e\u307f\u3092\u66f8\u304f\u3002\u6280\u8853\u7684\u306a\u6539\u5584\u3092\u8af8\u8a9e\u5f53\u305f\u308a\u306b\u3057\u306a\u3044\n"
+              "- \u65e5\u672c\u8a9e140\u5b57\u4ee5\u5185\n"
+              "- \u672c\u6587\u306e\u307f\u51fa\u529b"
+          )
+
+          res2 = gemini_client.models.generate_content(
+              model="gemini-2.5-flash",
+              contents=prompt2,
+              config=types.GenerateContentConfig(thinking_config=types.ThinkingConfig(thinking_budget=0))
+          )
+          tweet2 = truncate_tweet(res2.text.strip())
 
           print(f"Tweet1 ({tweet_length(tweet1)} weighted chars):\n{tweet1}")
           print(f"Tweet2 ({tweet_length(tweet2)} weighted chars):\n{tweet2}")
@@ -156,29 +168,27 @@ jobs:
           )
 
           try:
-              res1 = x_client.create_tweet(text=tweet1, user_auth=True)
-              tweet1_id = res1.data["id"]
+              r1 = x_client.create_tweet(text=tweet1, user_auth=True)
+              tweet1_id = r1.data["id"]
               print(f"Tweet1 posted! ID: {tweet1_id}")
 
               if tweet2:
-                  res2 = x_client.create_tweet(
+                  r2 = x_client.create_tweet(
                       text=tweet2,
                       in_reply_to_tweet_id=tweet1_id,
                       user_auth=True
                   )
-                  print(f"Tweet2 (reply) posted! ID: {res2.data['id']}")
+                  print(f"Tweet2 posted! ID: {r2.data['id']}")
 
           except tweepy.TweepyException as e:
               print(f"Failed to post to X: {e}")
               exit(1)
 
-          update_url = f"https://api.notion.com/v1/pages/{page_id}"
-          update_payload = {
-              "properties": {
-                  "Status": {"select": {"name": "Posted"}}
-              }
-          }
-          update_res = requests.patch(update_url, headers=notion_headers, json=update_payload)
+          update_res = requests.patch(
+              f"https://api.notion.com/v1/pages/{page_id}",
+              headers=notion_headers,
+              json={"properties": {"Status": {"select": {"name": "Posted"}}}}
+          )
 
           if update_res.status_code == 200:
               print("Successfully posted to X and updated Notion to Posted!")
