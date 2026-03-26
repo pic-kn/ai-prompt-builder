@@ -24,7 +24,6 @@ jobs:
 
           python3 << 'PYEOF'
           import os
-          import re
           import requests
           import tweepy
           from google import genai
@@ -77,15 +76,10 @@ jobs:
           kadai = get_text(props.get("\u8ab2\u984c", {}))
           kaiketsu = get_text(props.get("\u89e3\u6c7a", {}))
           shiji = get_text(props.get("\u6307\u793a", {}))
-          repo_full = get_text(props.get("\u30ea\u30dd\u30b8\u30c8\u30ea", {}))
-
-          repo_name = repo_full.split("/")[-1] if repo_full else ""
-          repo_tag = "#" + re.sub(r"[^a-zA-Z0-9_]", "_", repo_name) if repo_name else ""
 
           print(f"\u8ab2\u984c: {kadai}")
           print(f"\u89e3\u6c7a: {kaiketsu}")
           print(f"\u6307\u793a: {shiji}")
-          print(f"repo_tag: {repo_tag}")
 
           gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 
@@ -109,14 +103,8 @@ jobs:
               contents=prompt,
               config=types.GenerateContentConfig(thinking_config=types.ThinkingConfig(thinking_budget=0))
           )
-          tweet_body = response.text.strip()
-          print(f"Generated tweet:\n{tweet_body}")
+          tweet = response.text.strip()
 
-          tags = "#Claude #AI\u958b\u767a #BuildInPublic"
-          if repo_tag:
-              tags += f" {repo_tag}"
-
-          tweet = f"{tweet_body}\n\n{tags}"
           if len(tweet) > 280:
               tweet = tweet[:277] + "..."
 
