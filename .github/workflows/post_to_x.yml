@@ -160,18 +160,25 @@ jobs:
               r1 = x_client.create_tweet(text=tweet1, user_auth=True)
               tweet1_id = r1.data["id"]
               print(f"Tweet1 posted! ID: {tweet1_id}")
+          except tweepy.TweepyException as e:
+              print(f"Failed to post Tweet1: {e}")
+              exit(1)
 
-              if tweet2:
+          if tweet2:
+              try:
                   r2 = x_client.create_tweet(
                       text=tweet2,
                       in_reply_to_tweet_id=tweet1_id,
                       user_auth=True
                   )
-                  print(f"Tweet2 posted! ID: {r2.data['id']}")
-
-          except tweepy.TweepyException as e:
-              print(f"Failed to post to X: {e}")
-              exit(1)
+                  print(f"Tweet2 posted as reply! ID: {r2.data['id']}")
+              except tweepy.TweepyException as e:
+                  print(f"Reply failed ({e}), retrying as standalone tweet...")
+                  try:
+                      r2 = x_client.create_tweet(text=tweet2, user_auth=True)
+                      print(f"Tweet2 posted as standalone! ID: {r2.data['id']}")
+                  except tweepy.TweepyException as e2:
+                      print(f"Tweet2 also failed as standalone: {e2}")
 
           update_res = requests.patch(
               f"https://api.notion.com/v1/pages/{page_id}",
