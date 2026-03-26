@@ -39,7 +39,6 @@ jobs:
           GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 
           def tweet_length(text):
-              """X\u306e\u6587\u5b57\u6570\u3092\u6b63\u78ba\u306b\u30ab\u30a6\u30f3\u30c8\uff08CJK\u6587\u5b57=2\u3001\u305d\u306e\u4ed6=1\uff09"""
               count = 0
               for c in text:
                   if unicodedata.east_asian_width(c) in ('W', 'F'):
@@ -142,7 +141,7 @@ jobs:
               tweet1 = parts[0].replace("TWEET1:", "").strip()
               tweet2 = parts[1].strip()
           else:
-              tweet1 = output[:140]
+              tweet1 = output
               tweet2 = ""
 
           tweet1 = truncate_tweet(tweet1)
@@ -166,7 +165,7 @@ jobs:
               if tweet2:
                   res2 = x_client.create_tweet(
                       text=tweet2,
-                      reply={"in_reply_to_tweet_id": tweet1_id},
+                      in_reply_to_tweet_id=tweet1_id,
                       user_auth=True
                   )
                   print(f"Tweet2 (reply) posted! ID: {res2.data['id']}")
