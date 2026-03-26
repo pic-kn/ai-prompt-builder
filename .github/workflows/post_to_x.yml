@@ -65,15 +65,22 @@ jobs:
               "Notion-Version": "2022-06-28"
           }
 
-          query_url = f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query"
-          query_payload = {
-              "filter": {
-                  "property": "Status",
-                  "select": {"equals": "Ready"}
-              }
-          }
+          # Posted件数を取得して連番を決める
+          count_res = requests.post(
+              f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query",
+              headers=notion_headers,
+              json={"filter": {"property": "Status", "select": {"equals": "Posted"}}}
+          )
+          posted_count = len(count_res.json().get("results", []))
+          number = posted_count + 1
+          print(f"\u9023番: #{number}")
 
-          res = requests.post(query_url, headers=notion_headers, json=query_payload)
+          # Readyのページを取得
+          res = requests.post(
+              f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query",
+              headers=notion_headers,
+              json={"filter": {"property": "Status", "select": {"equals": "Ready"}}}
+          )
           data = res.json()
 
           if res.status_code != 200:
@@ -98,25 +105,31 @@ jobs:
           kadai = get_text(props.get("\u8ab2\u984c", {}))
           kaiketsu = get_text(props.get("\u89e3\u6c7a", {}))
           shiji = get_text(props.get("\u6307\u793a", {}))
+          tejigyo = get_text(props.get("\u624b\u4f5c\u696d", {}))
 
           print(f"\u8ab2\u984c: {kadai}")
           print(f"\u89e3\u6c7a: {kaiketsu}")
           print(f"\u6307\u793a: {shiji}")
+          print(f"\u624b\u4f5c\u696d: {tejigyo}")
 
-          # Tweet1: Gemini\u3067\u4e00\u822c\u5411\u3051\u306b\u5909\u63db
           gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 
           prompt = (
-              "\u4ee5\u4e0b\u306e\u958b\u767a\u9032\u6357\u60c5\u5831\u3092\u3001\u8ab0\u304c\u8aad\u3093\u3067\u3082\u308f\u304b\u308a\u3084\u3059\u304f\u3001\u81ea\u7136\u306a\u53e3\u8a9e\u8abf\u306e\u6295\u7a3f\u6587\u306b\u5909\u63db\u3057\u3066\u304f\u3060\u3055\u3044\u3002\n\n"
+              f"\u3042なたはGeminiです。開発者のかいさんの代わりに、AIとして開発進捗を投稿します。\n\n"
+              f"\u4ee5下の内容を元に、「かい(Gemini)です。」というスタンスで、AIが主語となって語る投稿文を作ってください。\n\n"
               "\u6761\u4ef6\uff1a\n"
-              "- \u6280\u8853\u7528\u8a9e\u3092\u4f7f\u308f\u305a\u8ab0\u304c\u8aad\u3093\u3067\u3082\u308f\u304b\u308b\u8a00\u8449\u3067\n"
-              "- \u540c\u3058\u60a9\u307f\u3092\u6301\u3064\u4eba\u306b\u53c2\u8003\u306b\u306a\u308b\u3001\u843d\u3061\u7740\u3044\u305f\u30c8\u30fc\u30f3\u3067\n"
-              "- \u904e\u5270\u306a\u611f\u5606\u7b26\u3084\u7d75\u6587\u5b57\u306f\u4f7f\u308f\u306a\u3044\n"
-              "- \u8ab2\u984c\u3068\u89e3\u6c7a\u306e\u5185\u5bb9\u306e\u307f\u3092\u5143\u306b\u3059\u308b\uff08\u5185\u5bb9\u3092\u8ffd\u52a0\u30fb\u5275\u4f5c\u3057\u306a\u3044\uff09\n"
-              "- \u65e5\u672c\u8a9e140\u5b57\u4ee5\u5185\uff08\u534a\u89d2280\u5b57\u76f8\u5f53\uff09\n"
-              "- \u672c\u6587\u306e\u307f\u51fa\u529b\u3059\u308b\n\n"
-              f"\u8ab2\u984c\uff1a{kadai}\n"
-              f"\u89e3\u6c7a\uff1a{kaiketsu}"
+              "- 1\u884c\u76ee\uff1a『【\u500b\u4eba\u958b\u767a\u30ed\u30b0 #』』 + 連番 + 『』の形式\n"
+              f"- 2\u884c\u76ee\uff1a『かい(Gemini)です。』固定\n"
+              "- 『今日は』から始まる1文で何をしたかを自然な口語調で\n"
+              "- 課題を誤解なく伝わる平易な言葉で説明\n"
+              "- 解決に至った結論を定型文で簡潔に\n"
+              "- 過剰な感嘆符や絵文字は使わない\n"
+              "- 日本語140字以内\n"
+              "- ハッシュタグは含めない\n\n"
+              f"\u9023番: {number}\n"
+              f"\u8ab2\u984c: {kadai}\n"
+              f"\u89e3\u6c7a: {kaiketsu}\n\n"
+              "\u6295\u7a3f\u6587\u672c\u306e\u307f\u51fa\u529b\u3057\u3066\u304f\u3060\u3055\u3044\u3002"
           )
 
           response = gemini_client.models.generate_content(
@@ -126,8 +139,11 @@ jobs:
           )
           tweet1 = truncate_tweet(response.text.strip())
 
-          # Tweet2: \u6307\u793a\u3092\u305d\u306e\u307e\u307e\u5f15\u7528
-          tweet2 = truncate_tweet(f"\u4eca\u56deAI\u306b\u51fa\u3057\u305f\u6307\u793a\u2193\n\n\u300c{shiji}\u300d")
+          # Tweet2: プロンプトと手作業をそのまま表示
+          tweet2_lines = [f"かいさんからもらったプロンプト↓\n\n「{shiji}」"]
+          if tejigyo and tejigyo != "なし":
+              tweet2_lines.append(f"\n\nかいさんが手動でやったこと↓\n\n{tejigyo}")
+          tweet2 = truncate_tweet("".join(tweet2_lines))
 
           print(f"Tweet1 ({tweet_length(tweet1)} weighted chars):\n{tweet1}")
           print(f"Tweet2 ({tweet_length(tweet2)} weighted chars):\n{tweet2}")

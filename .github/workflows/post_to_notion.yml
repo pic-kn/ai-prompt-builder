@@ -25,13 +25,19 @@ jobs:
           echo "Commit message:"
           echo "$COMMIT_MSG"
 
-          KADAI=$(echo "$COMMIT_MSG" | grep -oP '(?<=【課題】)[^\n【]*' | head -1 | xargs)
-          KAIKETSU=$(echo "$COMMIT_MSG" | grep -oP '(?<=【解決】)[^\n【]*' | head -1 | xargs)
-          SHIJI=$(echo "$COMMIT_MSG" | grep -oP '(?<=【指示】)[^\n【]*' | head -1 | xargs)
+          KADAI=$(echo "$COMMIT_MSG" | grep -oP '(?<=【課題】)[^
+【]*' | head -1 | xargs)
+          KAIKETSU=$(echo "$COMMIT_MSG" | grep -oP '(?<=【解決】)[^
+【]*' | head -1 | xargs)
+          SHIJI=$(echo "$COMMIT_MSG" | grep -oP '(?<=【指示】)[^
+【]*' | head -1 | xargs)
+          TEJIGYO=$(echo "$COMMIT_MSG" | grep -oP '(?<=【手作業】)[^
+【]*' | head -1 | xargs)
 
           echo "課題: $KADAI"
           echo "解決: $KAIKETSU"
           echo "指示: $SHIJI"
+          echo "手作業: $TEJIGYO"
           echo "リポジトリ: $REPO_NAME"
 
           if [ -z "$KADAI" ] || [ -z "$KAIKETSU" ] || [ -z "$SHIJI" ]; then
@@ -39,11 +45,16 @@ jobs:
             exit 0
           fi
 
+          if [ -z "$TEJIGYO" ]; then
+            TEJIGYO="なし"
+          fi
+
           PAYLOAD=$(jq -n \
             --arg db "$NOTION_DATABASE_ID" \
             --arg kadai "$KADAI" \
             --arg kaiketsu "$KAIKETSU" \
             --arg shiji "$SHIJI" \
+            --arg tejigyo "$TEJIGYO" \
             --arg repo "$REPO_NAME" \
             '{
               "parent": { "database_id": $db },
@@ -56,6 +67,9 @@ jobs:
                 },
                 "指示": {
                   "rich_text": [{ "text": { "content": $shiji } }]
+                },
+                "手作業": {
+                  "rich_text": [{ "text": { "content": $tejigyo } }]
                 },
                 "リポジトリ": {
                   "rich_text": [{ "text": { "content": $repo } }]
