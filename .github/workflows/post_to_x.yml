@@ -25,6 +25,7 @@ jobs:
           import os
           import requests
           import tweepy
+          import re
 
           NOTION_API_KEY = os.environ["NOTION_API_KEY"]
           NOTION_DATABASE_ID = os.environ["NOTION_DATABASE_ID"]
@@ -76,13 +77,23 @@ jobs:
           kadai = get_text(props.get("課題", {}))
           kaiketsu = get_text(props.get("解決", {}))
           shiji = get_text(props.get("指示", {}))
+          repo_full = get_text(props.get("リポジトリ", {}))
+
+          # リポジトリ名だけ取り出してハッシュタグ化（例: pic-kn/presetry → #presetry）
+          repo_name = repo_full.split("/")[-1] if repo_full else ""
+          repo_tag = "#" + re.sub(r"[^a-zA-Z0-9_]", "_", repo_name) if repo_name else ""
 
           print(f"課題: {kadai}")
           print(f"解決: {kaiketsu}")
           print(f"指示: {shiji}")
+          print(f"リポジトリタグ: {repo_tag}")
 
           # ツイート本文を組み立て（280文字以内に収める）
-          tweet = f"【課題】{kadai}\n\n【解決】{kaiketsu}\n\n💡AIへの指示：{shiji}\n\n#Claude #AI開発 #BuildInPublic"
+          tags = f"#Claude #AI開発 #BuildInPublic"
+          if repo_tag:
+              tags += f" {repo_tag}"
+
+          tweet = f"【課題】{kadai}\n\n【解決】{kaiketsu}\n\n💡AIへの指示：{shiji}\n\n{tags}"
           if len(tweet) > 280:
               tweet = tweet[:277] + "..."
 
