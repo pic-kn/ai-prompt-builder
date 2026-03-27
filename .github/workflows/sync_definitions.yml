@@ -1,0 +1,98 @@
+name: Sync definitions to Notion
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'CLAUDE.md'
+
+jobs:
+  sync-definitions:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sync definition table to Notion
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NOTION_DEFINITION_DB_ID: ${{ secrets.NOTION_DEFINITION_DB_ID }}
+        run: |
+          python3 << 'PYEOF'
+          import os
+          import re
+          import requests
+
+          NOTION_API_KEY = os.environ["NOTION_API_KEY"]
+          NOTION_DEFINITION_DB_ID = os.environ["NOTION_DEFINITION_DB_ID"]
+
+          notion_headers = {
+              "Authorization": f"Bearer {NOTION_API_KEY}",
+              "Content-Type": "application/json",
+              "Notion-Version": "2022-06-28"
+          }
+
+          with open("CLAUDE.md", "r") as f:
+              content = f.read()
+
+          # 定義一覧テーブルを抽出
+          table_match = re.search(r"### 定義一覧\n\n\|.*?\n\|.*?\n((?:\|.*?\n)+)", content)
+          if not table_match:
+              print("定義一覧が見つかりません。スキップします。")
+              exit(0)
+
+          rows = table_match.group(1).strip().split("\n")
+          definitions = []
+          for row in rows:
+              cols = [c.strip() for c in row.strip("|").split("|")]
+              if len(cols) >= 4:
+                  definitions.append({
+                      "name": cols[0],
+                      "category": cols[1],
+                      "content": cols[2],
+                      "example": cols[3]
+                  })
+
+          print(f"{len(definitions)}件の定義を検出")
+
+          # 既存のDBエントリを取得
+          res = requests.post(
+              f"https://api.notion.com/v1/databases/{NOTION_DEFINITION_DB_ID}/query",
+              headers=notion_headers,
+              json={}
+          )
+          existing = {
+              page["properties"]["定義名"]["title"][0]["text"]["content"]: page["id"]
+              for page in res.json().get("results", [])
+              if page["properties"].get("定義名", {}).get("title")
+          }
+
+          for d in definitions:
+              if d["name"] in existing:
+                  print(f"スキップ（既存）: {d['name']}")
+                  continue
+
+              payload = {
+                  "parent": {"database_id": NOTION_DEFINITION_DB_ID},
+                  "properties": {
+                      "定義名": {"title": [{"text": {"content": d["name"]}}]},
+                      "カテゴリ": {"rich_text": [{"text": {"content": d["category"]}}]},
+                      "内容": {"rich_text": [{"text": {"content": d["content"]}}]},
+                      "事例": {"rich_text": [{"text": {"content": d["example"]}}]}
+                  }
+              }
+
+              res = requests.post(
+                  "https://api.notion.com/v1/pages",
+                  headers=notion_headers,
+                  json=payload
+              )
+
+              if res.status_code == 200:
+                  print(f"追加: {d['name']}")
+              else:
+                  print(f"失敗: {d['name']}: {res.text}")
+                  exit(1)
+
+          PYEOF
