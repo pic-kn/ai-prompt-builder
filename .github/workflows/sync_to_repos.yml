@@ -7,6 +7,7 @@ on:
     paths:
       - 'CLAUDE.md'
       - '.github/workflows/post_to_notion.yml'
+      - 'scripts/fetch_definitions.py'
 
 jobs:
   sync:
@@ -148,31 +149,37 @@ jobs:
                   print(f"FAIL: {repo}/CLAUDE.md: {put_res.text}")
                   exit(1)
 
-          # post_to_notion.ymlの同期（変更なし・そのまま全同期）
-          with open(".github/workflows/post_to_notion.yml", "rb") as f:
-              notion_content = base64.b64encode(f.read()).decode()
+          # post_to_notion.yml・fetch_definitions.pyの同期（そのまま全同期）
+          simple_files = [
+              ".github/workflows/post_to_notion.yml",
+              "scripts/fetch_definitions.py"
+          ]
 
           for repo in target_repos:
-              get_res = requests.get(
-                  f"https://api.github.com/repos/{repo}/contents/.github/workflows/post_to_notion.yml",
-                  headers=headers
-              )
-              payload = {
-                  "message": "sync: post_to_notion.yml をai-prompt-builderから自動反映",
-                  "content": notion_content
-              }
-              if get_res.status_code == 200:
-                  payload["sha"] = get_res.json()["sha"]
+              for file_path in simple_files:
+                  with open(file_path, "rb") as f:
+                      file_content = base64.b64encode(f.read()).decode()
 
-              put_res = requests.put(
-                  f"https://api.github.com/repos/{repo}/contents/.github/workflows/post_to_notion.yml",
-                  headers=headers,
-                  json=payload
-              )
-              if put_res.status_code in (200, 201):
-                  print(f"OK: {repo}/post_to_notion.yml")
-              else:
-                  print(f"FAIL: {repo}/post_to_notion.yml: {put_res.text}")
-                  exit(1)
+                  get_res = requests.get(
+                      f"https://api.github.com/repos/{repo}/contents/{file_path}",
+                      headers=headers
+                  )
+                  payload = {
+                      "message": f"sync: {file_path} をai-prompt-builderから自動反映",
+                      "content": file_content
+                  }
+                  if get_res.status_code == 200:
+                      payload["sha"] = get_res.json()["sha"]
+
+                  put_res = requests.put(
+                      f"https://api.github.com/repos/{repo}/contents/{file_path}",
+                      headers=headers,
+                      json=payload
+                  )
+                  if put_res.status_code in (200, 201):
+                      print(f"OK: {repo}/{file_path}")
+                  else:
+                      print(f"FAIL: {repo}/{file_path}: {put_res.text}")
+                      exit(1)
 
           PYEOF
