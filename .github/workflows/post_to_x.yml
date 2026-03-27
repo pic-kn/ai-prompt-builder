@@ -80,7 +80,7 @@ jobs:
               headers=notion_headers,
               json={
                   "filter": {"property": "Status", "select": {"equals": "Ready"}},
-                  "sorts": [{"timestamp": "created_time", "direction": "ascending"}]
+                  "sorts": [{"property": "\u65e5\u4ed8", "direction": "ascending"}]
               }
           )
           data = res.json()
