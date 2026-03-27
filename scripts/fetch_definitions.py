@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# v1.1
 """
 セッション開始時にNotionの定義DBからデータを取得してCLAUDE.mdを更新するスクリプト
 """
