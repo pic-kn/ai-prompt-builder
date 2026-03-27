@@ -131,12 +131,18 @@ jobs:
               f"\u89e3\u6c7a: {kaiketsu}"
           )
 
-          res1 = gemini_client.models.generate_content(
-              model="gemini-2.5-flash",
-              contents=prompt1,
-              config=types.GenerateContentConfig(thinking_config=types.ThinkingConfig(thinking_budget=0))
-          )
-          tweet1 = truncate_tweet(res1.text.strip())
+          for attempt in range(3):
+              res1 = gemini_client.models.generate_content(
+                  model="gemini-2.5-flash",
+                  contents=prompt1,
+                  config=types.GenerateContentConfig(thinking_config=types.ThinkingConfig(thinking_budget=0))
+              )
+              tweet1 = res1.text.strip()
+              if tweet_length(tweet1) <= 280:
+                  break
+              print(f"文字数超過（{tweet_length(tweet1)}）再生成 {attempt + 1}/3")
+          else:
+              tweet1 = truncate_tweet(tweet1)
 
           # Tweet2: Gemini不使用 - 事実のみをそのまま記載
           te_line = ("\u624b\u4f5c\u696d\uff1a" + tejigyo) if tejigyo and tejigyo != "\u306a\u3057" else "\u624b\u4f5c\u696d\uff1a\u306a\u3057"
