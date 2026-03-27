@@ -23,9 +23,11 @@ jobs:
           import os
           import re
           import requests
+          from datetime import datetime, timezone, timedelta
 
           NOTION_API_KEY = os.environ["NOTION_API_KEY"]
           NOTION_DEFINITION_DB_ID = os.environ["NOTION_DEFINITION_DB_ID"]
+          today = datetime.now(timezone(timedelta(hours=9))).strftime("%Y-%m-%d")
 
           notion_headers = {
               "Authorization": f"Bearer {NOTION_API_KEY}",
@@ -79,7 +81,8 @@ jobs:
                       "定義名": {"title": [{"text": {"content": d["name"]}}]},
                       "カテゴリ": {"select": {"name": d["category"]}},
                       "内容": {"rich_text": [{"text": {"content": d["content"]}}]},
-                      "事例": {"rich_text": [{"text": {"content": d["example"]}}]}
+                      "事例": {"rich_text": [{"text": {"content": d["example"]}}]},
+                      "更新日": {"date": {"start": today}}
                   }
               }
 
