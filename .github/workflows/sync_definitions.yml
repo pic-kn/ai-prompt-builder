@@ -48,10 +48,19 @@ jobs:
           definitions = []
           for row in rows:
               cols = [c.strip() for c in row.strip("|").split("|")]
-              if len(cols) >= 4:
+              if len(cols) >= 5:
                   definitions.append({
                       "name": cols[0],
                       "category": cols[1],
+                      "scope": cols[2],
+                      "content": cols[3],
+                      "example": cols[4]
+                  })
+              elif len(cols) >= 4:
+                  definitions.append({
+                      "name": cols[0],
+                      "category": cols[1],
+                      "scope": "共通",
                       "content": cols[2],
                       "example": cols[3]
                   })
@@ -74,6 +83,7 @@ jobs:
               properties = {
                   "定義名": {"title": [{"text": {"content": d["name"]}}]},
                   "カテゴリ": {"select": {"name": d["category"]}},
+                  "スコープ": {"select": {"name": d["scope"]}},
                   "内容": {"rich_text": [{"text": {"content": d["content"]}}]},
                   "事例": {"rich_text": [{"text": {"content": d["example"]}}]},
                   "更新日": {"date": {"start": today}}
