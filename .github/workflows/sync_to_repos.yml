@@ -1,0 +1,70 @@
+name: Sync shared files to other repos
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'CLAUDE.md'
+      - '.github/workflows/post_to_notion.yml'
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sync files to presetry and color-memo
+        env:
+          SYNC_PAT: ${{ secrets.SYNC_PAT }}
+        run: |
+          python3 << 'PYEOF'
+          import os
+          import base64
+          import requests
+
+          token = os.environ["SYNC_PAT"]
+          headers = {
+              "Authorization": f"Bearer {token}",
+              "Accept": "application/vnd.github+json",
+              "X-GitHub-Api-Version": "2022-11-28"
+          }
+
+          target_repos = ["pic-kn/presetry", "pic-kn/color-memo"]
+          files = [
+              "CLAUDE.md",
+              ".github/workflows/post_to_notion.yml"
+          ]
+
+          for repo in target_repos:
+              for file_path in files:
+                  with open(file_path, "rb") as f:
+                      content = base64.b64encode(f.read()).decode()
+
+                  get_res = requests.get(
+                      f"https://api.github.com/repos/{repo}/contents/{file_path}",
+                      headers=headers
+                  )
+
+                  payload = {
+                      "message": f"sync: {file_path} をai-prompt-builderから自動反映",
+                      "content": content
+                  }
+
+                  if get_res.status_code == 200:
+                      payload["sha"] = get_res.json()["sha"]
+
+                  put_res = requests.put(
+                      f"https://api.github.com/repos/{repo}/contents/{file_path}",
+                      headers=headers,
+                      json=payload
+                  )
+
+                  if put_res.status_code in (200, 201):
+                      print(f"OK: {repo}/{file_path}")
+                  else:
+                      print(f"FAIL: {repo}/{file_path}: {put_res.text}")
+                      exit(1)
+
+          PYEOF
