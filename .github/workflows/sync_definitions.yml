@@ -71,29 +71,31 @@ jobs:
           }
 
           for d in definitions:
-              if d["name"] in existing:
-                  print(f"スキップ（既存）: {d['name']}")
-                  continue
-
-              payload = {
-                  "parent": {"database_id": NOTION_DEFINITION_DB_ID},
-                  "properties": {
-                      "定義名": {"title": [{"text": {"content": d["name"]}}]},
-                      "カテゴリ": {"select": {"name": d["category"]}},
-                      "内容": {"rich_text": [{"text": {"content": d["content"]}}]},
-                      "事例": {"rich_text": [{"text": {"content": d["example"]}}]},
-                      "更新日": {"date": {"start": today}}
-                  }
+              properties = {
+                  "定義名": {"title": [{"text": {"content": d["name"]}}]},
+                  "カテゴリ": {"select": {"name": d["category"]}},
+                  "内容": {"rich_text": [{"text": {"content": d["content"]}}]},
+                  "事例": {"rich_text": [{"text": {"content": d["example"]}}]},
+                  "更新日": {"date": {"start": today}}
               }
 
-              res = requests.post(
-                  "https://api.notion.com/v1/pages",
-                  headers=notion_headers,
-                  json=payload
-              )
+              if d["name"] in existing:
+                  res = requests.patch(
+                      f"https://api.notion.com/v1/pages/{existing[d['name']]}",
+                      headers=notion_headers,
+                      json={"properties": properties}
+                  )
+                  label = "更新"
+              else:
+                  res = requests.post(
+                      "https://api.notion.com/v1/pages",
+                      headers=notion_headers,
+                      json={"parent": {"database_id": NOTION_DEFINITION_DB_ID}, "properties": properties}
+                  )
+                  label = "追加"
 
               if res.status_code == 200:
-                  print(f"追加: {d['name']}")
+                  print(f"{label}: {d['name']}")
               else:
                   print(f"失敗: {d['name']}: {res.text}")
                   exit(1)
