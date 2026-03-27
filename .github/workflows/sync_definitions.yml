@@ -77,7 +77,7 @@ jobs:
                   "parent": {"database_id": NOTION_DEFINITION_DB_ID},
                   "properties": {
                       "定義名": {"title": [{"text": {"content": d["name"]}}]},
-                      "カテゴリ": {"rich_text": [{"text": {"content": d["category"]}}]},
+                      "カテゴリ": {"select": {"name": d["category"]}},
                       "内容": {"rich_text": [{"text": {"content": d["content"]}}]},
                       "事例": {"rich_text": [{"text": {"content": d["example"]}}]}
                   }
