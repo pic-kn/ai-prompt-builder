@@ -22,3 +22,18 @@
 - 5つのタグがすべて存在する場合のみNotionに自動蓄積される（手作業は「なし」でも可）
 - 【指示】は「ユーザーの言葉（抽象）→Claudeが具体化した内容」の形式で書くこと
 - この形式に従うことで、GitHub ActionsがNotionに自動蓄積し、毎日20:00 JSTにXへ自動投稿される
+
+## ワークフロー構成
+
+| ファイル | トリガー | 役割 |
+|---|---|---|
+| `post_to_notion.yml` | mainへのpush | コミットメッセージを解析してNotionに登録 |
+| `post_to_x.yml` | 毎日20:00 JST | NotionのReadyアイテムをXに投稿 |
+| `sync_to_repos.yml` | mainへのpush（CLAUDE.mdまたはpost_to_notion.yml変更時） | presetryとcolor-memoへ自動同期 |
+
+## 連携リポジトリ
+
+- `pic-kn/presetry`
+- `pic-kn/color-memo`
+
+上記リポジトリはこのリポジトリと同じNotionデータベースを共有しており、`sync_to_repos.yml` によってCLAUDE.mdとpost_to_notion.ymlが自動的に最新版に保たれる。
