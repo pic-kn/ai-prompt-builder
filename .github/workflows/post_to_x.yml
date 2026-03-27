@@ -78,7 +78,10 @@ jobs:
           res = requests.post(
               f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query",
               headers=notion_headers,
-              json={"filter": {"property": "Status", "select": {"equals": "Ready"}}}
+              json={
+                  "filter": {"property": "Status", "select": {"equals": "Ready"}},
+                  "sorts": [{"timestamp": "created_time", "direction": "ascending"}]
+              }
           )
           data = res.json()
 
