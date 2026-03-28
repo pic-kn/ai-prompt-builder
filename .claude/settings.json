@@ -1,0 +1,18 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "agent",
+            "if": "Bash(git push*)",
+            "prompt": "git pushが完了しました。CLAUDE.mdのルールに従い、GitHubのissue #8 (pic-kn/ai-prompt-builder)に作業記録をコメントとして投稿してください。以下の3点を含めてください：\n1. 完了したこと\n2. 未解決・次にやること\n3. 把握した現状の変化\n\nコメントはセッションの会話履歴から直近の作業内容を読み取って書いてください。",
+            "timeout": 60,
+            "statusMessage": "Issue #8を更新中..."
+          }
+        ]
+      }
+    ]
+  }
+}
