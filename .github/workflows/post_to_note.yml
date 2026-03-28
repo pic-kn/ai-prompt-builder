@@ -314,7 +314,7 @@ jobs:
 
               page.wait_for_timeout(500)
 
-              # 本文入力（行ごとにEnterを打つことで ## → 見出しブロックの自動変換を有効化）
+              # 本文入力（クリップボード経由でペースト → 高速 + ## 見出し変換を維持）
               try:
                   editors = page.locator('[contenteditable="true"]')
                   count = editors.count()
@@ -322,15 +322,12 @@ jobs:
                   body_editor = editors.nth(1) if count > 1 else editors.first
                   body_editor.click()
                   page.wait_for_timeout(300)
-                  lines = article_body.split('\n')
-                  total = 0
-                  for line in lines:
-                      if total > 8000:
-                          break
-                      page.keyboard.type(line)
-                      page.keyboard.press('Enter')
-                      total += len(line) + 1
-                  print(f"本文入力完了 ({total}文字)")
+                  body_text = article_body[:8000]
+                  ctx.grant_permissions(["clipboard-read", "clipboard-write"])
+                  page.evaluate(f"() => navigator.clipboard.writeText({__import__('json').dumps(body_text)})")
+                  page.keyboard.press('Control+v')
+                  page.wait_for_timeout(1000)
+                  print(f"本文入力完了 ({len(body_text)}文字)")
               except Exception as e:
                   print(f"本文入力エラー: {e}")
 
