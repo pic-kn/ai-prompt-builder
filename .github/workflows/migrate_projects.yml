@@ -1,0 +1,121 @@
+name: Migrate Existing Projects to Project DB
+
+on:
+  workflow_dispatch:
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Scan commit log and create missing projects
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+          NOTION_PROJECT_DB_ID: ${{ secrets.NOTION_PROJECT_DB_ID }}
+        run: |
+          python3 << 'PYEOF'
+          import os
+          import requests
+
+          NOTION_API_KEY = os.environ["NOTION_API_KEY"]
+          NOTION_DATABASE_ID = os.environ["NOTION_DATABASE_ID"]
+          NOTION_PROJECT_DB_ID = os.environ["NOTION_PROJECT_DB_ID"]
+
+          notion_headers = {
+              "Authorization": f"Bearer {NOTION_API_KEY}",
+              "Content-Type": "application/json",
+              "Notion-Version": "2022-06-28"
+          }
+
+          # 1. コミットログDBから全プロジェクト名を収集
+          project_names = set()
+          cursor = None
+
+          while True:
+              body = {"page_size": 100}
+              if cursor:
+                  body["start_cursor"] = cursor
+
+              res = requests.post(
+                  f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query",
+                  headers=notion_headers,
+                  json=body
+              )
+
+              if res.status_code != 200:
+                  print(f"コミットDB取得失敗: {res.text}")
+                  exit(1)
+
+              data = res.json()
+              for page in data.get("results", []):
+                  prop = page["properties"].get("プロジェクト", {})
+                  items = prop.get("rich_text", [])
+                  name = "".join([t["text"]["content"] for t in items if "text" in t]).strip()
+                  if name:
+                      project_names.add(name)
+
+              if not data.get("has_more"):
+                  break
+              cursor = data.get("next_cursor")
+
+          print(f"コミットログから {len(project_names)} 件のプロジェクト名を検出")
+
+          # 2. プロジェクト管理DBの既存エントリを取得
+          existing_names = set()
+          cursor = None
+
+          while True:
+              body = {"page_size": 100}
+              if cursor:
+                  body["start_cursor"] = cursor
+
+              res = requests.post(
+                  f"https://api.notion.com/v1/databases/{NOTION_PROJECT_DB_ID}/query",
+                  headers=notion_headers,
+                  json=body
+              )
+
+              if res.status_code != 200:
+                  print(f"プロジェクトDB取得失敗: {res.text}")
+                  exit(1)
+
+              data = res.json()
+              for page in data.get("results", []):
+                  for key, val in page["properties"].items():
+                      if val.get("type") == "title" and val.get("title"):
+                          name = "".join([t["text"]["content"] for t in val["title"] if "text" in t]).strip()
+                          if name:
+                              existing_names.add(name)
+
+              if not data.get("has_more"):
+                  break
+              cursor = data.get("next_cursor")
+
+          print(f"プロジェクト管理DBに既存 {len(existing_names)} 件")
+
+          # 3. 未登録のプロジェクトを作成
+          new_names = project_names - existing_names
+          print(f"新規登録対象: {len(new_names)} 件")
+
+          created = 0
+          for name in sorted(new_names):
+              res = requests.post(
+                  "https://api.notion.com/v1/pages",
+                  headers=notion_headers,
+                  json={
+                      "parent": {"database_id": NOTION_PROJECT_DB_ID},
+                      "properties": {
+                          "名前": {"title": [{"text": {"content": name}}]},
+                          "ステータス": {"status": {"name": "進行中"}}
+                      }
+                  }
+              )
+              if res.status_code == 200:
+                  print(f"  ✓ {name}")
+                  created += 1
+              else:
+                  print(f"  ✗ {name}: {res.text}")
+
+          print(f"\n完了: {created}/{len(new_names)} 件を登録しました")
+          PYEOF

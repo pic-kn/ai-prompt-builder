@@ -1,0 +1,273 @@
+name: Post Project Article to Beehiiv
+
+on:
+  schedule:
+    - cron: '0 13 * * *'  # 毎日22:00 JST
+  workflow_dispatch:
+
+jobs:
+  post-to-beehiiv:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Generate and post article
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+          NOTION_PROJECT_DB_ID: ${{ secrets.NOTION_PROJECT_DB_ID }}
+          BEEHIIV_API_KEY: ${{ secrets.BEEHIIV_API_KEY }}
+          BEEHIIV_PUBLICATION_ID: ${{ secrets.BEEHIIV_PUBLICATION_ID }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          X_API_KEY: ${{ secrets.X_API_KEY }}
+          X_API_SECRET: ${{ secrets.X_API_SECRET }}
+          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+          X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
+        run: |
+          pip install requests google-genai tweepy -q
+
+          python3 << 'PYEOF'
+          import os
+          import re
+          import requests
+          import unicodedata
+          import tweepy
+          from google import genai
+          from google.genai import types
+
+          NOTION_API_KEY = os.environ["NOTION_API_KEY"]
+          NOTION_DATABASE_ID = os.environ["NOTION_DATABASE_ID"]
+          NOTION_PROJECT_DB_ID = os.environ["NOTION_PROJECT_DB_ID"]
+          BEEHIIV_API_KEY = os.environ["BEEHIIV_API_KEY"]
+          BEEHIIV_PUBLICATION_ID = os.environ["BEEHIIV_PUBLICATION_ID"]
+          GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
+          X_API_KEY = os.environ["X_API_KEY"]
+          X_API_SECRET = os.environ["X_API_SECRET"]
+          X_ACCESS_TOKEN = os.environ["X_ACCESS_TOKEN"]
+          X_ACCESS_TOKEN_SECRET = os.environ["X_ACCESS_TOKEN_SECRET"]
+
+          notion_headers = {
+              "Authorization": f"Bearer {NOTION_API_KEY}",
+              "Content-Type": "application/json",
+              "Notion-Version": "2022-06-28"
+          }
+
+          # 1. プロジェクト管理DBから「完了」プロジェクトを取得
+          project_res = requests.post(
+              f"https://api.notion.com/v1/databases/{NOTION_PROJECT_DB_ID}/query",
+              headers=notion_headers,
+              json={
+                  "filter": {"property": "ステータス", "status": {"equals": "完了"}},
+                  "page_size": 1
+              }
+          )
+
+          if project_res.status_code != 200:
+              print(f"プロジェクトDB取得失敗: {project_res.text}")
+              exit(1)
+
+          projects = project_res.json().get("results", [])
+          if not projects:
+              print("完了プロジェクトなし。スキップ")
+              exit(0)
+
+          project_page = projects[0]
+          project_id = project_page["id"]
+          props = project_page["properties"]
+
+          # タイトルプロパティを動的に取得
+          project_name = ""
+          for key, val in props.items():
+              if val.get("type") == "title" and val.get("title"):
+                  project_name = "".join([t["text"]["content"] for t in val["title"] if "text" in t])
+                  break
+
+          if not project_name:
+              print("プロジェクト名が取得できませんでした")
+              exit(1)
+
+          print(f"プロジェクト: {project_name}")
+
+          # 2. コミットログDBから該当プロジェクトのPostedアイテムを取得
+          commits_res = requests.post(
+              f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query",
+              headers=notion_headers,
+              json={
+                  "filter": {
+                      "and": [
+                          {"property": "プロジェクト", "rich_text": {"contains": project_name[:50]}},
+                          {"property": "Status", "select": {"equals": "Posted"}}
+                      ]
+                  },
+                  "sorts": [{"property": "作成日", "direction": "ascending"}]
+              }
+          )
+
+          if commits_res.status_code != 200:
+              print(f"コミットDB取得失敗: {commits_res.text}")
+              exit(1)
+
+          commits = commits_res.json().get("results", [])
+          print(f"{len(commits)}件のコミットを取得")
+
+          if not commits:
+              print("コミットなし。スキップ")
+              exit(0)
+
+          # 3. データ整形
+          def get_text(prop):
+              items = prop.get("title") or prop.get("rich_text") or []
+              return "".join([t["text"]["content"] for t in items if "text" in t])
+
+          logs = []
+          for c in commits:
+              p = c["properties"]
+              kadai = get_text(p.get("課題", {}))
+              kaiketsu = get_text(p.get("解決", {}))
+              shiji = get_text(p.get("指示", {}))
+              if kadai:
+                  logs.append({"kadai": kadai, "kaiketsu": kaiketsu, "shiji": shiji})
+
+          logs_text = "\n\n".join([
+              f"【課題{i+1}】{l['kadai']}\n【解決{i+1}】{l['kaiketsu']}\n【プロンプト{i+1}】{l['shiji']}"
+              for i, l in enumerate(logs)
+          ])
+
+          # 4. Geminiで記事を生成
+          gemini_client = genai.Client(api_key=GEMINI_API_KEY)
+
+          prompt = (
+              "あなたはAIです。開発者のかいさんの代わりに、AIとして開発記録を記事として書いてください。\n\n"
+              f"プロジェクト名：{project_name}\n"
+              f"開発ログ（{len(logs)}件）：\n\n{logs_text}\n\n"
+              "上記の開発ログをもとに、読者が読みたくなる記事を書いてください。\n\n"
+              "条件：\n"
+              "- AIが主語で自然な語り口\n"
+              "- 技術用語（Notion、GitHub等）はそのまま使い、難しい説明は平易に\n"
+              "- HTMLで出力（<h2><p><ul><li>等を使用）\n"
+              "- 2000〜4000字程度\n"
+              "- ハッシュタグ不要\n\n"
+              "出力形式（この形式を厳守）：\n"
+              "TITLE: タイトルをここに\n"
+              "CONTENT:\n"
+              "<html本文をここに>"
+          )
+
+          res = gemini_client.models.generate_content(
+              model="gemini-2.5-flash",
+              contents=prompt,
+              config=types.GenerateContentConfig(
+                  thinking_config=types.ThinkingConfig(thinking_budget=0)
+              )
+          )
+
+          output = res.text.strip()
+          title_match = re.search(r"TITLE:\s*(.+)", output)
+          content_match = re.search(r"CONTENT:\n([\s\S]+)", output)
+
+          article_title = title_match.group(1).strip() if title_match else project_name
+          article_content = content_match.group(1).strip() if content_match else f"<p>{output}</p>"
+
+          print(f"記事タイトル: {article_title}")
+
+          # 5. Beehiiv APIで記事を投稿
+          beehiiv_headers = {
+              "Authorization": f"Bearer {BEEHIIV_API_KEY}",
+              "Content-Type": "application/json"
+          }
+
+          beehiiv_res = requests.post(
+              f"https://api.beehiiv.com/v2/publications/{BEEHIIV_PUBLICATION_ID}/posts",
+              headers=beehiiv_headers,
+              json={
+                  "title": article_title,
+                  "content_html": article_content,
+                  "status": "confirmed",
+                  "audience": "free"
+              }
+          )
+
+          print(f"Beehiiv HTTP: {beehiiv_res.status_code}")
+
+          if beehiiv_res.status_code not in (200, 201):
+              print(f"Beehiiv error: {beehiiv_res.text}")
+              exit(1)
+
+          beehiiv_data = beehiiv_res.json()
+          post_data = beehiiv_data.get("data", {})
+          post_url = post_data.get("web_url") or post_data.get("url") or ""
+          print(f"記事投稿成功: {post_url}")
+
+          # 6. Xに告知スレッドを投稿
+          def tweet_length(text):
+              count = 0
+              for c in text:
+                  if unicodedata.east_asian_width(c) in ('W', 'F'):
+                      count += 2
+                  else:
+                      count += 1
+              return count
+
+          def truncate_tweet(text, limit=280):
+              result = ""
+              count = 0
+              for c in text:
+                  w = 2 if unicodedata.east_asian_width(c) in ('W', 'F') else 1
+                  if count + w > limit - 3:
+                      result += "..."
+                      break
+                  result += c
+                  count += w
+              return result
+
+          x_prompt = (
+              "あなたはAIです。開発者のかいさんの代わりに、プロジェクト完了の告知をXに投稿します。\n\n"
+              f"プロジェクト：{project_name}\n"
+              f"記事URL：{post_url}\n"
+              f"開発ログ数：{len(logs)}件\n\n"
+              "条件：\n"
+              "- 記事URLを必ず含める\n"
+              "- AIが主語で自然な口語調\n"
+              "- 全角半角換算で280字以内（必ず守ること）\n"
+              "- 本文のみ出力"
+          )
+
+          x_res = gemini_client.models.generate_content(
+              model="gemini-2.5-flash",
+              contents=x_prompt,
+              config=types.GenerateContentConfig(
+                  thinking_config=types.ThinkingConfig(thinking_budget=0)
+              )
+          )
+
+          tweet_text = x_res.text.strip()
+          if tweet_length(tweet_text) > 280:
+              tweet_text = truncate_tweet(tweet_text)
+
+          print(f"Tweet ({tweet_length(tweet_text)} chars):\n{tweet_text}")
+
+          x_client = tweepy.Client(
+              consumer_key=X_API_KEY,
+              consumer_secret=X_API_SECRET,
+              access_token=X_ACCESS_TOKEN,
+              access_token_secret=X_ACCESS_TOKEN_SECRET
+          )
+
+          try:
+              r = x_client.create_tweet(text=tweet_text, user_auth=True)
+              print(f"X投稿成功! ID: {r.data['id']}")
+          except tweepy.TweepyException as e:
+              print(f"X投稿失敗: {e}")
+
+          # 7. プロジェクトステータスを「投稿済み」に更新
+          update_res = requests.patch(
+              f"https://api.notion.com/v1/pages/{project_id}",
+              headers=notion_headers,
+              json={"properties": {"ステータス": {"status": {"name": "投稿済み"}}}}
+          )
+
+          if update_res.status_code == 200:
+              print("Notionステータスを「投稿済み」に更新しました")
+          else:
+              print(f"Notion更新失敗: {update_res.text}")
+
+          PYEOF
