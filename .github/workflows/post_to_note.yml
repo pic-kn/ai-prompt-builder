@@ -28,10 +28,6 @@ jobs:
           X_API_SECRET: ${{ secrets.X_API_SECRET }}
           X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
           X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
-          X_API_KEY_2: ${{ secrets.X_API_KEY_2 }}
-          X_API_SECRET_2: ${{ secrets.X_API_SECRET_2 }}
-          X_ACCESS_TOKEN_2: ${{ secrets.X_ACCESS_TOKEN_2 }}
-          X_ACCESS_TOKEN_SECRET_2: ${{ secrets.X_ACCESS_TOKEN_SECRET_2 }}
         run: |
           python3 << 'PYEOF'
           import os
@@ -420,25 +416,15 @@ jobs:
               access_token_secret=X_ACCESS_TOKEN_SECRET
           )
 
-          x_posted = False
-          for x_creds in [
-              (X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET),
-              (os.environ.get("X_API_KEY_2",""), os.environ.get("X_API_SECRET_2",""),
-               os.environ.get("X_ACCESS_TOKEN_2",""), os.environ.get("X_ACCESS_TOKEN_SECRET_2","")),
-          ]:
-              if not all(x_creds):
-                  continue
-              try:
-                  xc = tweepy.Client(consumer_key=x_creds[0], consumer_secret=x_creds[1],
-                                     access_token=x_creds[2], access_token_secret=x_creds[3])
-                  r = xc.create_tweet(text=tweet_text, user_auth=True)
-                  print(f"X投稿成功! ID: {r.data['id']}")
-                  x_posted = True
-                  break
-              except tweepy.TweepyException as e:
-                  print(f"X投稿失敗（次のキーを試す）: {e}")
-          if not x_posted:
-              print("X投稿失敗: 全APIキーが失敗しました")
+          try:
+              x_client = tweepy.Client(
+                  consumer_key=X_API_KEY, consumer_secret=X_API_SECRET,
+                  access_token=X_ACCESS_TOKEN, access_token_secret=X_ACCESS_TOKEN_SECRET
+              )
+              r = x_client.create_tweet(text=tweet_text, user_auth=True)
+              print(f"X投稿成功! ID: {r.data['id']}")
+          except tweepy.TweepyException as e:
+              print(f"X投稿失敗: {e}")
 
           # 7. Notionプロジェクトを「投稿済み」に更新
           update_props = {"ステータス": {"status": {"name": "投稿済み"}}}
