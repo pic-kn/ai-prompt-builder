@@ -246,12 +246,13 @@ jobs:
               print("note idが取得できませんでした")
               exit(1)
 
-          # ステップ2: PUTでステータスを「公開」に変更（bodyは送らない）
+          # ステップ2: PUTでステータスを「公開」に変更
+          # note.com APIのstatusは "public" を試す（"published"は422になる場合がある）
           put_res = session.put(
               f"https://note.com/api/v1/text_notes/{note_id}",
               json={
                   "name": article_title,
-                  "status": "published",
+                  "status": "public",
                   "price": 0
               }
           )
@@ -295,6 +296,7 @@ jobs:
               "- 記事URLを必ず含める\n"
               "- 落ち着いたトーンで簡潔に。過剰な感嘆符や絵文字は使わない\n"
               "- 投稿者は「かい(AI)」として、何のプロジェクトかを一言で伝える\n"
+              "- 「push」はGitHubへのコードpush（git push）のことであり、スマートフォンへのプッシュ通知ではない。混同しないこと\n"
               "- 全角半角換算で280字以内（必ず守ること）\n"
               "- 本文のみ出力"
           )
