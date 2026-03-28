@@ -207,7 +207,7 @@ jobs:
               json={
                   "name": article_title,
                   "body": article_content,
-                  "status": "draft",
+                  "status": "published",
                   "price": 0,
                   "is_paid": False
               }
