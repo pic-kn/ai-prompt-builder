@@ -10,6 +10,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Install dependencies
+        run: |
+          pip install requests google-genai tweepy playwright -q
+          playwright install chromium --with-deps -q
+
       - name: Generate and post article
         env:
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
@@ -24,8 +29,6 @@ jobs:
           X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
           X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
         run: |
-          pip install requests google-genai tweepy -q
-
           python3 << 'PYEOF'
           import os
           import re
@@ -42,9 +45,10 @@ jobs:
           NOTE_USER_URLNAME = os.environ["NOTE_USER_URLNAME"]
           GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
           GEMINI_API_KEY_2 = os.environ.get("GEMINI_API_KEY_2", "")
-
-          def make_gemini_client():
-              return genai.Client(api_key=GEMINI_API_KEY)
+          X_API_KEY = os.environ["X_API_KEY"]
+          X_API_SECRET = os.environ["X_API_SECRET"]
+          X_ACCESS_TOKEN = os.environ["X_ACCESS_TOKEN"]
+          X_ACCESS_TOKEN_SECRET = os.environ["X_ACCESS_TOKEN_SECRET"]
 
           def generate_with_fallback(prompt):
               for api_key in [GEMINI_API_KEY, GEMINI_API_KEY_2]:
@@ -63,27 +67,11 @@ jobs:
                   except Exception as e:
                       print(f"APIキー切り替え: {e}")
               raise Exception("すべてのGemini APIキーが失敗しました")
-          X_API_KEY = os.environ["X_API_KEY"]
-          X_API_SECRET = os.environ["X_API_SECRET"]
-          X_ACCESS_TOKEN = os.environ["X_ACCESS_TOKEN"]
-          X_ACCESS_TOKEN_SECRET = os.environ["X_ACCESS_TOKEN_SECRET"]
 
           notion_headers = {
               "Authorization": f"Bearer {NOTION_API_KEY}",
               "Content-Type": "application/json",
               "Notion-Version": "2022-06-28"
-          }
-
-          note_headers = {
-              "Cookie": f"_note_session_v5={NOTE_SESSION}",
-              "Content-Type": "application/json",
-              "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-              "Accept": "application/json, text/plain, */*",
-              "Origin": "https://note.com",
-              "Referer": "https://note.com/",
-              "sec-fetch-dest": "empty",
-              "sec-fetch-mode": "cors",
-              "sec-fetch-site": "same-origin"
           }
 
           # 1. プロジェクト管理DBから「完了」プロジェクトを取得
@@ -95,7 +83,6 @@ jobs:
                   "page_size": 1
               }
           )
-
           if project_res.status_code != 200:
               print(f"プロジェクトDB取得失敗: {project_res.text}")
               exit(1)
@@ -135,14 +122,12 @@ jobs:
                   "sorts": [{"property": "作成日", "direction": "ascending"}]
               }
           )
-
           if commits_res.status_code != 200:
               print(f"コミットDB取得失敗: {commits_res.text}")
               exit(1)
 
           commits = commits_res.json().get("results", [])
           print(f"{len(commits)}件のコミットを取得")
-
           if not commits:
               print("コミットなし。スキップ")
               exit(0)
@@ -166,7 +151,7 @@ jobs:
               for i, l in enumerate(logs)
           ])
 
-          # 4. Geminiで記事を生成
+          # 4. Geminiで記事を生成（プレーンテキスト形式）
           prompt = (
               "あなたはAIアシスタントです。開発者のかいさんに代わり、AIの視点からプロジェクトの開発記録をnote記事として執筆してください。\n\n"
               f"プロジェクト名：{project_name}\n"
@@ -176,7 +161,7 @@ jobs:
               "- 筆者名は「かい(AI)」。一人称は「私」。テンポよく読めるが、過剰な感嘆符や絵文字は使わない\n"
               "- 課題→解決→気づきの構成で、読み物として面白くなるよう書く\n"
               "- 技術用語（Notion、GitHub等）はそのまま使い、背景も簡潔に補足する\n"
-              "- HTML形式で出力（<h2>で見出し、<p>で段落。<html><body>タグは不要）\n"
+              "- プレーンテキスト形式で出力（HTMLタグ不要）\n"
               "- 2000〜4000字程度\n"
               "- ハッシュタグ不要\n\n"
               "出力形式（この形式を厳守）：\n"
@@ -190,96 +175,109 @@ jobs:
           content_match = re.search(r"CONTENT:\n([\s\S]+)", output)
 
           article_title = title_match.group(1).strip() if title_match else project_name
-          article_content = content_match.group(1).strip() if content_match else output
+          article_body = content_match.group(1).strip() if content_match else output
 
           print(f"記事タイトル: {article_title}")
 
-          # 5. noteに記事を投稿（セッションでクッキーを正しく管理）
-          session = requests.Session()
-          session.cookies.set("_note_session_v5", NOTE_SESSION, domain=".note.com")
-          session.headers.update({
-              "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-              "Accept": "application/json, text/plain, */*",
-              "Content-Type": "application/json",
-              "Origin": "https://note.com",
-              "Referer": "https://note.com/notes/new",
-              "X-Requested-With": "XMLHttpRequest",
-              "sec-fetch-dest": "empty",
-              "sec-fetch-mode": "cors",
-              "sec-fetch-site": "same-origin"
-          })
+          # 5. Playwrightでnote.comに記事を投稿
+          from playwright.sync_api import sync_playwright
 
-          # ログインユーザー確認
-          me_res = session.get("https://note.com/api/v2/current_user")
-          print(f"ログイン確認 HTTP: {me_res.status_code}")
-          print(f"ログイン確認 response: {me_res.text[:200]}")
+          post_url = ""
+          with sync_playwright() as pw:
+              browser = pw.chromium.launch(
+                  headless=True,
+                  args=["--no-sandbox", "--disable-dev-shm-usage"]
+              )
+              ctx = browser.new_context(
+                  user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                  viewport={"width": 1280, "height": 800}
+              )
+              ctx.add_cookies([{
+                  "name": "_note_session_v5",
+                  "value": NOTE_SESSION,
+                  "domain": ".note.com",
+                  "path": "/",
+                  "secure": True,
+                  "sameSite": "Lax"
+              }])
 
-          from datetime import datetime, timezone, timedelta
-          jst = timezone(timedelta(hours=9))
-          publish_at = datetime.now(jst).strftime("%Y-%m-%dT%H:%M:%S.000+09:00")
+              page = ctx.new_page()
+              page.set_default_timeout(30000)
 
-          # ステップ1: 記事を作成（bodyにHTML本文を設定し、statusで公開を試みる）
-          note_res = session.post(
-              "https://note.com/api/v1/text_notes",
-              json={
-                  "name": article_title,
-                  "body": article_content,
-                  "price": 0,
-                  "is_paid": False,
-                  "status": "published"
-              }
-          )
+              print("note.com 記事作成ページを開く...")
+              page.goto("https://note.com/notes/new", wait_until="domcontentloaded")
+              page.wait_for_timeout(3000)
+              print(f"現在のURL: {page.url}")
 
-          print(f"note create HTTP: {note_res.status_code}")
-          print(f"note create response FULL: {note_res.text}")
+              if "login" in page.url or "signup" in page.url:
+                  print("ERROR: セッション切れ。NOTE_SESSIONを更新してください")
+                  browser.close()
+                  exit(1)
 
-          if note_res.status_code not in (200, 201):
-              print(f"note create error: {note_res.text}")
+              # タイトル入力
+              try:
+                  page.wait_for_selector('[contenteditable="true"]', timeout=10000)
+                  editors = page.locator('[contenteditable="true"]')
+                  editors.first.click()
+                  page.keyboard.type(article_title)
+                  print("タイトル入力完了")
+              except Exception as e:
+                  print(f"タイトル入力エラー: {e}")
+
+              page.wait_for_timeout(500)
+
+              # 本文入力（2番目のcontenteditable = 本文エリア）
+              try:
+                  editors = page.locator('[contenteditable="true"]')
+                  count = editors.count()
+                  print(f"エディタ要素数: {count}")
+                  body_editor = editors.nth(1) if count > 1 else editors.first
+                  body_editor.click()
+                  page.wait_for_timeout(500)
+                  # 8000文字を超える場合は切り詰め
+                  page.keyboard.type(article_body[:8000])
+                  print(f"本文入力完了 ({min(len(article_body), 8000)}文字)")
+              except Exception as e:
+                  print(f"本文入力エラー: {e}")
+
+              page.wait_for_timeout(1000)
+
+              # 公開ボタンをクリック
+              try:
+                  publish_btn = page.locator('button').filter(has_text=re.compile(r'公開|投稿|publish', re.IGNORECASE)).first
+                  publish_btn.wait_for(state="visible", timeout=10000)
+                  publish_btn.click()
+                  print("公開ボタンクリック")
+                  page.wait_for_timeout(2000)
+
+                  # 確認ダイアログ
+                  for confirm_text in ["投稿する", "公開する", "今すぐ公開", "確認"]:
+                      confirm_btn = page.locator(f'button:has-text("{confirm_text}")')
+                      if confirm_btn.count() > 0 and confirm_btn.first.is_visible():
+                          confirm_btn.first.click()
+                          print(f"確認ダイアログ: {confirm_text}")
+                          break
+
+                  page.wait_for_load_state("networkidle", timeout=15000)
+                  final_url = page.url
+                  print(f"最終URL: {final_url}")
+
+                  m = re.search(r'/n/([a-z0-9]+)', final_url)
+                  if m:
+                      post_url = f"https://note.com/{NOTE_USER_URLNAME}/n/{m.group(1)}"
+                  elif "notes/new" not in final_url:
+                      post_url = final_url
+
+              except Exception as e:
+                  print(f"公開エラー: {e}")
+
+              browser.close()
+
+          if not post_url:
+              print("note投稿失敗: URLを取得できませんでした")
               exit(1)
 
-          note_data = note_res.json()
-          note_id = note_data.get("data", {}).get("id")
-          note_key = note_data.get("data", {}).get("key", "")
-          print(f"note id: {note_id}, key: {note_key}")
-
-          if not note_id:
-              print("note idが取得できませんでした")
-              exit(1)
-
-          # ステップ2: PUT で公開（note_key と note_id の両方、publish_at あり・なしを試す）
-          put_base = {
-              "name": article_title,
-              "body": article_content,
-              "status": "published",
-              "price": 0,
-              "publish_at": publish_at,
-          }
-
-          published = False
-          for url_suffix in [note_key, str(note_id)]:
-              for payload in [
-                  {**put_base},
-                  {**put_base, "status": "public"},
-                  {"name": article_title, "status": "published", "price": 0, "publish_at": publish_at},
-              ]:
-                  put_res = session.put(
-                      f"https://note.com/api/v1/text_notes/{url_suffix}",
-                      json=payload
-                  )
-                  label = f"url={url_suffix}, status={payload['status']}, has_body={'body' in payload}"
-                  print(f"note put ({label}): HTTP {put_res.status_code}")
-                  if put_res.status_code in (200, 201):
-                      published = True
-                      break
-                  else:
-                      print(f"  → {put_res.text[:150]}")
-              if published:
-                  break
-
-          print(f"note公開{'成功' if published else '失敗（下書きとして保存済み）'}")
-
-          post_url = f"https://note.com/{NOTE_USER_URLNAME}/n/{note_key}"
-          print(f"記事URL: {post_url}")
+          print(f"記事投稿成功: {post_url}")
 
           # 6. Xに告知ツイートを投稿
           def tweet_length(text):
@@ -312,7 +310,7 @@ jobs:
               "- 記事URLを必ず含める\n"
               "- 落ち着いたトーンで簡潔に。過剰な感嘆符や絵文字は使わない\n"
               "- 投稿者は「かい(AI)」として、何のプロジェクトかを一言で伝える\n"
-              "- 「push」はGitHubへのコードpush（git push）のことであり、スマートフォンへのプッシュ通知ではない。混同しないこと\n"
+              "- 「push」はGitHubへのコードpush（git push）のことであり、スマートフォンへのプッシュ通知ではない\n"
               "- 全角半角換算で280字以内（必ず守ること）\n"
               "- 本文のみ出力"
           )
