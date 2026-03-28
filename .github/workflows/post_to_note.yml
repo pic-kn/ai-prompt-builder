@@ -246,28 +246,36 @@ jobs:
               print("note idが取得できませんでした")
               exit(1)
 
-          # ステップ2: GETで現在のnote状態を取得し、全フィールドを把握した上でPUT
+          # 平文版を用意（HTML非対応の場合のフォールバック）
+          plain_body = re.sub(r'<[^>]+>', '\n', article_content)
+          plain_body = re.sub(r'\n{3,}', '\n\n', plain_body).strip()
+
+          # ステップ2: GETで現在の全フィールドを取得
           get_res = session.get(f"https://note.com/api/v1/text_notes/{note_id}")
           print(f"note get HTTP: {get_res.status_code}")
+          note_current = {}
           if get_res.status_code == 200:
               note_current = get_res.json().get("data", {})
               print(f"note current status: {note_current.get('status')}")
               print(f"note current body length: {len(str(note_current.get('body', '')))}")
-              # 既存フィールドをそのまま使い、statusだけ変更してPUT
-              note_current["status"] = "published"
-              put_res = session.put(
-                  f"https://note.com/api/v1/text_notes/{note_id}",
-                  json=note_current
-              )
-          else:
-              print(f"note get error: {get_res.text}")
-              # フォールバック: シンプルなPUT
-              put_res = session.put(
-                  f"https://note.com/api/v1/text_notes/{note_id}",
-                  json={"name": article_title, "status": "published", "price": 0}
-              )
-          print(f"note put HTTP: {put_res.status_code}")
-          print(f"note put response FULL: {put_res.text}")
+
+          # 試行1: 全フィールド + HTML body + status=published
+          put_payload = dict(note_current)
+          put_payload.update({"name": article_title, "body": article_content, "status": "published", "price": 0})
+          put_res = session.put(f"https://note.com/api/v1/text_notes/{note_id}", json=put_payload)
+          print(f"note put (HTML) HTTP: {put_res.status_code}")
+
+          if put_res.status_code not in (200, 201):
+              print(f"HTML body PUT失敗: {put_res.text[:300]}")
+              # 試行2: 平文body
+              put_payload["body"] = plain_body
+              put_res = session.put(f"https://note.com/api/v1/text_notes/{note_id}", json=put_payload)
+              print(f"note put (plain) HTTP: {put_res.status_code}")
+              if put_res.status_code not in (200, 201):
+                  print(f"plain body PUT失敗: {put_res.text[:300]}")
+
+          published = put_res.status_code in (200, 201)
+          print(f"note公開{'成功' if published else '失敗（下書きとして保存済み）'}")
 
           post_url = f"https://note.com/{NOTE_USER_URLNAME}/n/{note_key}"
           print(f"記事URL: {post_url}")
