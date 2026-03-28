@@ -30,6 +30,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           if ! git diff --quiet CLAUDE.md; then
+            git stash
+            git pull origin main
+            git stash pop
             git add CLAUDE.md
             git commit -m "chore: Notionから定義を自動更新"
             git push origin main
