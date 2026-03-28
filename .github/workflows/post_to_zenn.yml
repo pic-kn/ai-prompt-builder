@@ -217,15 +217,13 @@ jobs:
 
           # 5. Zenn用フロントマターを作成
           topics_yaml = json.dumps(topics_list, ensure_ascii=False)
-          frontmatter = f"""---
-title: "{article_title}"
-emoji: "{article_emoji}"
-type: "tech"
-topics: {topics_yaml}
-published: true
----
-
-"""
+          frontmatter = "---\n"
+          frontmatter += f'title: "{article_title}"\n'
+          frontmatter += f'emoji: "{article_emoji}"\n'
+          frontmatter += 'type: "tech"\n'
+          frontmatter += f'topics: {topics_yaml}\n'
+          frontmatter += "published: true\n"
+          frontmatter += "---\n\n"
           full_content = frontmatter + article_body
 
           # 6. slugを生成してGitHub APIでarticles/にpush
