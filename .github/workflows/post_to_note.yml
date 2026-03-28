@@ -180,15 +180,36 @@ jobs:
 
           print(f"記事タイトル: {article_title}")
 
-          # 5. noteに記事を投稿
-          note_res = requests.post(
+          # 5. CSRFトークンを取得してnoteに記事を投稿
+          csrf_res = requests.get(
+              "https://note.com/api/v2/current_user",
+              headers=note_headers
+          )
+          print(f"CSRF取得 HTTP: {csrf_res.status_code}")
+
+          csrf_token = ""
+          if csrf_res.status_code == 200:
+              csrf_token = csrf_res.headers.get("X-CSRF-Token", "")
+
+          # Cookieヘッダーを更新（Set-Cookieからセッションを引き継ぐ）
+          session = requests.Session()
+          session.headers.update(note_headers)
+          session.get("https://note.com/api/v2/current_user")
+
+          post_headers = dict(note_headers)
+          if csrf_token:
+              post_headers["X-CSRF-Token"] = csrf_token
+          post_headers["X-Requested-With"] = "XMLHttpRequest"
+
+          note_res = session.post(
               "https://note.com/api/v1/text_notes",
-              headers=note_headers,
+              headers=post_headers,
               json={
                   "name": article_title,
                   "body": article_content,
-                  "status": "published",
-                  "price": 0
+                  "status": "draft",
+                  "price": 0,
+                  "is_paid": False
               }
           )
 
