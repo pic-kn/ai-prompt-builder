@@ -18,6 +18,7 @@ jobs:
           NOTE_SESSION: ${{ secrets.NOTE_SESSION }}
           NOTE_USER_URLNAME: ${{ secrets.NOTE_USER_URLNAME }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
           X_API_KEY: ${{ secrets.X_API_KEY }}
           X_API_SECRET: ${{ secrets.X_API_SECRET }}
           X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
@@ -40,6 +41,28 @@ jobs:
           NOTE_SESSION = os.environ["NOTE_SESSION"]
           NOTE_USER_URLNAME = os.environ["NOTE_USER_URLNAME"]
           GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
+          GEMINI_API_KEY_2 = os.environ.get("GEMINI_API_KEY_2", "")
+
+          def make_gemini_client():
+              return genai.Client(api_key=GEMINI_API_KEY)
+
+          def generate_with_fallback(prompt):
+              for api_key in [GEMINI_API_KEY, GEMINI_API_KEY_2]:
+                  if not api_key:
+                      continue
+                  try:
+                      client = genai.Client(api_key=api_key)
+                      res = client.models.generate_content(
+                          model="gemini-2.5-flash",
+                          contents=prompt,
+                          config=types.GenerateContentConfig(
+                              thinking_config=types.ThinkingConfig(thinking_budget=0)
+                          )
+                      )
+                      return res.text.strip()
+                  except Exception as e:
+                      print(f"APIキー切り替え: {e}")
+              raise Exception("すべてのGemini APIキーが失敗しました")
           X_API_KEY = os.environ["X_API_KEY"]
           X_API_SECRET = os.environ["X_API_SECRET"]
           X_ACCESS_TOKEN = os.environ["X_ACCESS_TOKEN"]
@@ -144,8 +167,6 @@ jobs:
           ])
 
           # 4. Geminiで記事を生成
-          gemini_client = genai.Client(api_key=GEMINI_API_KEY)
-
           prompt = (
               "あなたはAIアシスタントです。開発者のかいさんに代わり、AIの視点からプロジェクトの開発記録をnote記事として執筆してください。\n\n"
               f"プロジェクト名：{project_name}\n"
@@ -164,15 +185,7 @@ jobs:
               "本文をここに"
           )
 
-          res = gemini_client.models.generate_content(
-              model="gemini-2.5-flash",
-              contents=prompt,
-              config=types.GenerateContentConfig(
-                  thinking_config=types.ThinkingConfig(thinking_budget=0)
-              )
-          )
-
-          output = res.text.strip()
+          output = generate_with_fallback(prompt)
           title_match = re.search(r"TITLE:\s*(.+)", output)
           content_match = re.search(r"CONTENT:\n([\s\S]+)", output)
 
@@ -279,15 +292,7 @@ jobs:
               "- 本文のみ出力"
           )
 
-          x_res = gemini_client.models.generate_content(
-              model="gemini-2.5-flash",
-              contents=x_prompt,
-              config=types.GenerateContentConfig(
-                  thinking_config=types.ThinkingConfig(thinking_budget=0)
-              )
-          )
-
-          tweet_text = x_res.text.strip()
+          tweet_text = generate_with_fallback(x_prompt)
           if tweet_length(tweet_text) > 280:
               tweet_text = truncate_tweet(tweet_text)
 
