@@ -162,6 +162,9 @@ jobs:
               "- 課題→解決→気づきの構成で、読み物として面白くなるよう書く\n"
               "- 技術用語（Notion、GitHub等）はそのまま使い、背景も簡潔に補足する\n"
               "- プレーンテキスト形式で出力（HTMLタグ・Markdownの#や*などの記号は一切使わない）\n"
+              "- 見出しは【見出しテキスト】の形式で書く（例：【課題の背景】）\n"
+              "- 段落と段落の間は必ず1行空ける\n"
+              "- 重要な概念や技術用語を強調したい場合は「」で囲む\n"
               "- 2000〜4000字程度\n"
               "- ハッシュタグ不要\n\n"
               "出力形式（この形式を厳守）：\n"
@@ -236,6 +239,31 @@ jobs:
               note_key = note_key_match.group(1) if note_key_match else ""
               print(f"note key: {note_key}")
 
+              # アイキャッチ画像をエディタ画面でアップロード（タイトル入力前）
+              if eyecatch_path:
+                  try:
+                      # 隠しfile inputを直接探す
+                      file_inputs = page.locator('input[type="file"]')
+                      if file_inputs.count() > 0:
+                          file_inputs.first.set_input_files(eyecatch_path)
+                          page.wait_for_timeout(2000)
+                          print("アイキャッチアップロード完了（file input）")
+                      else:
+                          # ボタン経由で試みる
+                          for sel in ['[class*="eyecatch"]', '[class*="EyeCatch"]',
+                                      '[class*="cover"]', 'button:has-text("アイキャッチ")']:
+                              if page.locator(sel).count() > 0:
+                                  with page.expect_file_chooser(timeout=5000) as fc:
+                                      page.locator(sel).first.click()
+                                  fc.value.set_files(eyecatch_path)
+                                  page.wait_for_timeout(2000)
+                                  print(f"アイキャッチアップロード完了: {sel}")
+                                  break
+                          else:
+                              print("アイキャッチのfile inputが見つかりません（スキップ）")
+                  except Exception as e:
+                      print(f"アイキャッチエラー（スキップ）: {e}")
+
               # タイトル入力（inputを優先、なければcontenteditable）
               title_filled = False
               for sel in ['input[placeholder*="タイトル"]', 'input[name="title"]',
@@ -296,33 +324,6 @@ jobs:
 
                   # パネルのアニメーション完了を待つ（重要）
                   page.wait_for_timeout(3000)
-
-                  # アイキャッチ画像をアップロード
-                  if eyecatch_path:
-                      try:
-                          for sel in [
-                              'input[type="file"][accept*="image"]',
-                              'input[type="file"]',
-                              '[class*="eyecatch"] input',
-                              '[class*="EyeCatch"] input',
-                          ]:
-                              if page.locator(sel).count() > 0:
-                                  page.locator(sel).first.set_input_files(eyecatch_path)
-                                  page.wait_for_timeout(2000)
-                                  print(f"アイキャッチアップロード完了: {sel}")
-                                  break
-                          else:
-                              # file inputが見つからない場合はfile chooserで試みる
-                              for btn_sel in ['button:has-text("アイキャッチ")', '[class*="eyecatch"]', '[class*="cover"]']:
-                                  if page.locator(btn_sel).count() > 0:
-                                      with page.expect_file_chooser(timeout=5000) as fc:
-                                          page.locator(btn_sel).first.click()
-                                      fc.value.set_files(eyecatch_path)
-                                      page.wait_for_timeout(2000)
-                                      print(f"アイキャッチアップロード完了: {btn_sel}")
-                                      break
-                      except Exception as e:
-                          print(f"アイキャッチアップロードエラー（スキップ）: {e}")
 
                   # 全ボタンを出力（visible限定なし）
                   try:
