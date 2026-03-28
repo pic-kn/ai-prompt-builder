@@ -29,6 +29,7 @@ jobs:
           if ! git diff --quiet CLAUDE.md; then
             git add CLAUDE.md
             git commit -m "chore: Notionから定義を自動更新"
+            git pull --rebase origin main
             git push origin main
           else
             echo "変更なし、スキップ"
