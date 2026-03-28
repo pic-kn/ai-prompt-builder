@@ -106,8 +106,8 @@ jobs:
                   json={
                       "parent": {"database_id": NOTION_PROJECT_DB_ID},
                       "properties": {
-                          "名前": {"title": [{"text": {"content": name}}]},
-                          "ステータス": {"status": {"name": "進行中"}}
+                          "プロジェクト名": {"title": [{"text": {"content": name}}]},
+                          "ステータス": {"status": {"name": "未着手"}}
                       }
                   }
               )

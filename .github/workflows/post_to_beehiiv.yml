@@ -258,11 +258,15 @@ jobs:
           except tweepy.TweepyException as e:
               print(f"X投稿失敗: {e}")
 
-          # 7. プロジェクトステータスを「投稿済み」に更新
+          # 7. プロジェクトステータスを「完了」→「投稿済み」に更新、beehiivリンクも保存
+          update_props = {"ステータス": {"status": {"name": "投稿済み"}}}
+          if post_url:
+              update_props["beehiivリンク"] = {"url": post_url}
+
           update_res = requests.patch(
               f"https://api.notion.com/v1/pages/{project_id}",
               headers=notion_headers,
-              json={"properties": {"ステータス": {"status": {"name": "投稿済み"}}}}
+              json={"properties": update_props}
           )
 
           if update_res.status_code == 200:
