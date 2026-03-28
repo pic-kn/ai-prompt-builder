@@ -242,44 +242,24 @@ jobs:
               print(f"note key: {note_key}")
 
               # アイキャッチ画像をエディタ画面でアップロード（タイトル入力前）
+              # スクリーンショットより：丸いSVGアイコンボタン（テキストなし）なので全ボタンを順に試す
               if eyecatch_path:
                   try:
                       page.wait_for_timeout(2000)
-                      all_btns = page.locator('button').all()
-                      btn_texts = [b.inner_text() for b in all_btns[:30]]
-                      print(f"ページのボタン一覧: {btn_texts}")
                       eyecatch_done = False
-                      # まず隠しfile inputを直接試す
-                      file_inputs = page.locator('input[type="file"]')
-                      if file_inputs.count() > 0:
-                          file_inputs.first.set_input_files(eyecatch_path)
-                          page.wait_for_timeout(2000)
-                          print("アイキャッチアップロード完了（file input）")
-                          eyecatch_done = True
-                      if not eyecatch_done:
-                          for sel in [
-                              'button:has-text("ヘッダー画像")',
-                              'button:has-text("ヘッダー")',
-                              'button:has-text("アイキャッチ")',
-                              'button:has-text("画像を設定")',
-                              '[data-testid*="eyecatch"]',
-                              '[data-testid*="header"]',
-                              '[class*="eyecatch"]',
-                              '[class*="EyeCatch"]',
-                              '[class*="headerImage"]',
-                              '[class*="coverImage"]',
-                          ]:
-                              if page.locator(sel).count() > 0:
-                                  try:
-                                      with page.expect_file_chooser(timeout=5000) as fc:
-                                          page.locator(sel).first.click()
-                                      fc.value.set_files(eyecatch_path)
-                                      page.wait_for_timeout(3000)
-                                      print(f"アイキャッチアップロード完了: {sel}")
-                                      eyecatch_done = True
-                                      break
-                                  except Exception as inner_e:
-                                      print(f"  {sel} 失敗: {inner_e}")
+                      all_btns = page.locator('button').all()
+                      print(f"ボタン数: {len(all_btns)}")
+                      for i, btn in enumerate(all_btns[:10]):
+                          try:
+                              with page.expect_file_chooser(timeout=3000) as fc:
+                                  btn.click()
+                              fc.value.set_files(eyecatch_path)
+                              page.wait_for_timeout(3000)
+                              print(f"アイキャッチアップロード完了（button[{i}]）")
+                              eyecatch_done = True
+                              break
+                          except Exception:
+                              pass
                       if not eyecatch_done:
                           print("アイキャッチボタンが見つかりません（スキップ）")
                   except Exception as e:
