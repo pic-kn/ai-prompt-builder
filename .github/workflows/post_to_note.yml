@@ -235,8 +235,7 @@ jobs:
                   "name": article_title,
                   "body": article_content,
                   "status": "published",
-                  "price": 0,
-                  "publish_at": publish_at
+                  "price": 0
               }
           )
           print(f"note put HTTP: {put_res.status_code}")
