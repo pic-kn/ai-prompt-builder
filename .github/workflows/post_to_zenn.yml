@@ -1,4 +1,4 @@
-name: Post Project Article to note
+name: Post Project Article to Zenn
 
 on:
   schedule:
@@ -6,31 +6,22 @@ on:
   workflow_dispatch:
 
 jobs:
-  post-to-note:
+  post-to-zenn:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Cache Playwright browsers
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-chromium-${{ runner.os }}
-
       - name: Install dependencies
-        run: |
-          pip install requests google-genai tweepy playwright anthropic -q
-          playwright install chromium --with-deps
+        run: pip install requests google-genai anthropic -q
 
       - name: Generate and post article
         env:
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
           NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
           NOTION_PROJECT_DB_ID: ${{ secrets.NOTION_PROJECT_DB_ID }}
-          NOTE_SESSION: ${{ secrets.NOTE_SESSION }}
-          NOTE_USER_URLNAME: ${{ secrets.NOTE_USER_URLNAME }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SYNC_PAT: ${{ secrets.SYNC_PAT }}
           X_API_KEY: ${{ secrets.X_API_KEY }}
           X_API_SECRET: ${{ secrets.X_API_SECRET }}
           X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
@@ -40,6 +31,10 @@ jobs:
           import os
           import re
           import sys
+          import json
+          import base64
+          import random
+          import string
           import requests
           import unicodedata
           import tweepy
@@ -49,15 +44,17 @@ jobs:
           NOTION_API_KEY = os.environ["NOTION_API_KEY"]
           NOTION_DATABASE_ID = os.environ["NOTION_DATABASE_ID"]
           NOTION_PROJECT_DB_ID = os.environ["NOTION_PROJECT_DB_ID"]
-          NOTE_SESSION = os.environ["NOTE_SESSION"]
-          NOTE_USER_URLNAME = os.environ["NOTE_USER_URLNAME"]
           GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
           GEMINI_API_KEY_2 = os.environ.get("GEMINI_API_KEY_2", "")
           ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+          SYNC_PAT = os.environ["SYNC_PAT"]
           X_API_KEY = os.environ["X_API_KEY"]
           X_API_SECRET = os.environ["X_API_SECRET"]
           X_ACCESS_TOKEN = os.environ["X_ACCESS_TOKEN"]
           X_ACCESS_TOKEN_SECRET = os.environ["X_ACCESS_TOKEN_SECRET"]
+
+          ZENN_USERNAME = "autoloop"
+          GITHUB_REPO = "pic-kn/ai-prompt-builder"
 
           def generate_with_fallback(prompt):
               for api_key in [GEMINI_API_KEY, GEMINI_API_KEY_2]:
@@ -173,9 +170,9 @@ jobs:
               for i, l in enumerate(logs)
           ])
 
-          # 4. Geminiで記事を生成（プレーンテキスト形式）
+          # 4. Geminiで記事を生成
           prompt = (
-              "あなたはAIアシスタントです。開発者のかいさんに代わり、AIの視点からプロジェクトの開発記録をnote記事として執筆してください。\n\n"
+              "あなたはAIアシスタントです。開発者のかいさんに代わり、AIの視点からプロジェクトの開発記録をZenn記事として執筆してください。\n\n"
               f"プロジェクト名：{project_name}\n"
               f"開発ログ（{len(logs)}件）：\n\n{logs_text}\n\n"
               "上記の開発ログをもとに、技術的な読者に向けた読み応えのある記事を書いてください。\n\n"
@@ -183,16 +180,17 @@ jobs:
               "- 筆者名は「かい(AI)」。一人称は「私」。テンポよく読めるが、過剰な感嘆符や絵文字は使わない\n"
               "- 課題→解決→気づきの構成で、読み物として面白くなるよう書く\n"
               "- 技術用語（Notion、GitHub等）はそのまま使い、背景も簡潔に補足する\n"
-              "- マークダウン形式で出力する（noteエディタへのペーストで自動変換される）\n"
+              "- マークダウン形式で出力する\n"
               "- 見出しは「## 」（大見出し）または「### 」（小見出し）を使う\n"
               "- 段落と段落の間は必ず1行空ける\n"
               "- 重要な概念や技術用語の強調は「**用語**」のように**で囲む\n"
-              "- 箇条書きは行頭に「- 」を使う（例：- ポイント1）\n"
-              "- 箇条書きを積極的に使って読みやすくする（手順・比較・まとめ等）\n"
+              "- 箇条書きは行頭に「- 」を使う\n"
               "- 2000〜4000字程度\n"
               "- ハッシュタグ不要\n\n"
               "出力形式（この形式を厳守）：\n"
               "TITLE: タイトルをここに\n"
+              "EMOJI: 記事に合う絵文字を1つ（例：🤖）\n"
+              "TOPICS: カンマ区切りで3つ以内（例：python,github,notion）\n"
               "CONTENT:\n"
               "本文をここに"
           )
@@ -200,203 +198,65 @@ jobs:
           try:
               output = generate_with_fallback(prompt)
           except Exception as e:
-              print(f"Gemini API失敗のためスキップ: {e}")
+              print(f"記事生成失敗のためスキップ: {e}")
               sys.exit(0)
+
           title_match = re.search(r"TITLE:\s*(.+)", output)
+          emoji_match = re.search(r"EMOJI:\s*(.+)", output)
+          topics_match = re.search(r"TOPICS:\s*(.+)", output)
           content_match = re.search(r"CONTENT:\n([\s\S]+)", output)
 
           article_title = title_match.group(1).strip() if title_match else project_name
+          article_emoji = emoji_match.group(1).strip() if emoji_match else "🤖"
+          topics_raw = topics_match.group(1).strip() if topics_match else "python,github"
+          topics_list = [t.strip() for t in topics_raw.split(",")][:3]
           article_body = content_match.group(1).strip() if content_match else output
 
           print(f"記事タイトル: {article_title}")
+          print(f"絵文字: {article_emoji} / トピック: {topics_list}")
 
-          # 5a. アイキャッチ画像をpicsum.photosからダウンロード（APIキー不要）
-          eyecatch_path = None
-          try:
-              img_res = requests.get(
-                  "https://picsum.photos/1280/720",
-                  allow_redirects=True, timeout=15
-              )
-              if img_res.status_code == 200 and len(img_res.content) > 10000:
-                  eyecatch_path = "/tmp/eyecatch.jpg"
-                  with open(eyecatch_path, "wb") as f:
-                      f.write(img_res.content)
-                  print(f"アイキャッチ画像ダウンロード完了 ({len(img_res.content)} bytes)")
-              else:
-                  print(f"アイキャッチダウンロード失敗: status={img_res.status_code}, size={len(img_res.content)}")
-          except Exception as e:
-              print(f"アイキャッチダウンロード失敗（スキップ）: {e}")
+          # 5. Zenn用フロントマターを作成
+          topics_yaml = json.dumps(topics_list, ensure_ascii=False)
+          frontmatter = f"""---
+title: "{article_title}"
+emoji: "{article_emoji}"
+type: "tech"
+topics: {topics_yaml}
+published: true
+---
 
-          # 5b. Playwrightでnote.comに記事を投稿
-          from playwright.sync_api import sync_playwright
+"""
+          full_content = frontmatter + article_body
 
-          post_url = ""
-          with sync_playwright() as pw:
-              browser = pw.chromium.launch(
-                  headless=True,
-                  args=["--no-sandbox", "--disable-dev-shm-usage"]
-              )
-              ctx = browser.new_context(
-                  user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-                  viewport={"width": 1280, "height": 800}
-              )
-              ctx.add_cookies([{
-                  "name": "_note_session_v5",
-                  "value": NOTE_SESSION,
-                  "domain": ".note.com",
-                  "path": "/",
-                  "secure": True,
-                  "sameSite": "Lax"
-              }])
+          # 6. slugを生成してGitHub APIでarticles/にpush
+          slug = "".join(random.choices(string.ascii_lowercase + string.digits, k=12))
+          file_path = f"articles/{slug}.md"
+          encoded_content = base64.b64encode(full_content.encode("utf-8")).decode("utf-8")
 
-              page = ctx.new_page()
-              page.set_default_timeout(30000)
+          github_headers = {
+              "Authorization": f"Bearer {SYNC_PAT}",
+              "Accept": "application/vnd.github+json",
+              "X-GitHub-Api-Version": "2022-11-28"
+          }
 
-              print("note.com 記事作成ページを開く...")
-              page.goto("https://note.com/notes/new", wait_until="domcontentloaded")
-              page.wait_for_timeout(5000)
-              print(f"現在のURL: {page.url}")
+          push_res = requests.put(
+              f"https://api.github.com/repos/{GITHUB_REPO}/contents/{file_path}",
+              headers=github_headers,
+              json={
+                  "message": f"Add Zenn article: {article_title}",
+                  "content": encoded_content,
+                  "branch": "main"
+              }
+          )
 
-              if "login" in page.url or "signup" in page.url:
-                  print("ERROR: セッション切れ。NOTE_SESSIONを更新してください")
-                  browser.close()
-                  exit(1)
-
-              # editor URLからnote keyを早期取得（公開URLの構成に使う）
-              note_key_match = re.search(r'/notes/([a-z0-9]+)', page.url)
-              note_key = note_key_match.group(1) if note_key_match else ""
-              print(f"note key: {note_key}")
-
-              # アイキャッチ画像をエディタ画面でアップロード（タイトル入力前）
-              # スクリーンショットより：丸いSVGアイコンボタン（テキストなし）なので全ボタンを順に試す
-              if eyecatch_path:
-                  try:
-                      page.wait_for_timeout(2000)
-                      eyecatch_done = False
-                      all_btns = page.locator('button').all()
-                      print(f"ボタン数: {len(all_btns)}")
-                      for i, btn in enumerate(all_btns[:10]):
-                          try:
-                              with page.expect_file_chooser(timeout=3000) as fc:
-                                  btn.click()
-                              fc.value.set_files(eyecatch_path)
-                              page.wait_for_timeout(3000)
-                              print(f"アイキャッチアップロード完了（button[{i}]）")
-                              eyecatch_done = True
-                              break
-                          except Exception:
-                              pass
-                      if not eyecatch_done:
-                          print("アイキャッチボタンが見つかりません（スキップ）")
-                  except Exception as e:
-                      print(f"アイキャッチエラー（スキップ）: {e}")
-
-              # タイトル入力（inputを優先、なければcontenteditable）
-              title_filled = False
-              for sel in ['input[placeholder*="タイトル"]', 'input[name="title"]',
-                          'textarea[placeholder*="タイトル"]', '.title-input input']:
-                  try:
-                      loc = page.locator(sel)
-                      if loc.count() > 0:
-                          loc.first.click()
-                          page.keyboard.press("Control+a")
-                          page.keyboard.type(article_title)
-                          print(f"タイトル入力完了: {sel}")
-                          title_filled = True
-                          break
-                  except:
-                      pass
-
-              if not title_filled:
-                  try:
-                      editors = page.locator('[contenteditable="true"]')
-                      editors.first.click()
-                      page.keyboard.type(article_title)
-                      page.keyboard.press("Tab")
-                      print("タイトル入力完了: contenteditable")
-                      title_filled = True
-                  except Exception as e:
-                      print(f"タイトル入力エラー: {e}")
-
-              page.wait_for_timeout(500)
-
-              # 本文入力（クリップボード経由でペースト → 高速 + ## 見出し変換を維持）
-              try:
-                  editors = page.locator('[contenteditable="true"]')
-                  count = editors.count()
-                  print(f"エディタ要素数: {count}")
-                  body_editor = editors.nth(1) if count > 1 else editors.first
-                  body_editor.click()
-                  page.wait_for_timeout(300)
-                  body_text = article_body[:8000]
-                  ctx.grant_permissions(["clipboard-read", "clipboard-write"])
-                  page.evaluate(f"() => navigator.clipboard.writeText({__import__('json').dumps(body_text)})")
-                  page.keyboard.press('Control+v')
-                  page.wait_for_timeout(1000)
-                  print(f"本文入力完了 ({len(body_text)}文字)")
-              except Exception as e:
-                  print(f"本文入力エラー: {e}")
-
-              page.wait_for_timeout(1000)
-
-              # 公開フロー（公開設定ボタン → パネルが開く → 投稿ボタン の2段階）
-              try:
-                  # ステップ1: 右上の「公開」ボタン
-                  for btn_text in ["公開設定", "公開する", "公開", "投稿"]:
-                      btn = page.locator(f'button:has-text("{btn_text}")').first
-                      if btn.count() > 0:
-                          try:
-                              btn.wait_for(state="visible", timeout=5000)
-                              btn.click()
-                              print(f"公開設定ボタンクリック: {btn_text}")
-                              break
-                          except:
-                              pass
-
-                  # パネルのアニメーション完了を待つ（重要）
-                  page.wait_for_timeout(3000)
-
-                  # 全ボタンを出力（visible限定なし）
-                  try:
-                      all_btns = page.locator('button').all_text_contents()
-                      print(f"全ボタン: {all_btns}")
-                  except:
-                      pass
-
-                  # ステップ2: パネル内の確認ボタン（wait_for_selectorで出現を待つ）
-                  submitted = False
-                  for confirm_text in ["投稿する", "公開する", "今すぐ公開", "投稿"]:
-                      try:
-                          page.wait_for_selector(f'button:has-text("{confirm_text}")', timeout=5000)
-                          confirm = page.locator(f'button:has-text("{confirm_text}")')
-                          confirm.last.click()
-                          print(f"投稿確認クリック: {confirm_text}")
-                          page.wait_for_timeout(3000)
-                          submitted = True
-                          break
-                      except:
-                          pass
-
-                  if not submitted:
-                      print("確認ボタンが見つかりませんでした")
-
-                  print(f"最終URL: {page.url}")
-
-              except Exception as e:
-                  print(f"公開エラー: {e}")
-
-              browser.close()
-
-          # note keyから公開URLを構成（editor URLに依存しない）
-          if note_key:
-              post_url = f"https://note.com/{NOTE_USER_URLNAME}/n/{note_key}"
-          if not post_url:
-              print("note投稿失敗: note keyを取得できませんでした")
+          if push_res.status_code not in (200, 201):
+              print(f"GitHub push失敗: {push_res.text}")
               exit(1)
 
+          post_url = f"https://zenn.dev/{ZENN_USERNAME}/articles/{slug}"
           print(f"記事投稿成功: {post_url}")
 
-          # 6. Xに告知ツイートを投稿
+          # 7. Xに告知ツイートを投稿
           def tweet_length(text):
               count = 0
               for c in text:
@@ -446,10 +306,11 @@ jobs:
           except Exception as e:
               print(f"X投稿スキップ: {e}")
 
-          # 7. Notionプロジェクトを「投稿済み」に更新
-          update_props = {"ステータス": {"status": {"name": "投稿済み"}}}
-          if post_url:
-              update_props["beehiivリンク"] = {"url": post_url}
+          # 8. Notionプロジェクトを「投稿済み」に更新
+          update_props = {
+              "ステータス": {"status": {"name": "投稿済み"}},
+              "beehiivリンク": {"url": post_url}
+          }
 
           update_res = requests.patch(
               f"https://api.notion.com/v1/pages/{project_id}",
