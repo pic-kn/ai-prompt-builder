@@ -1,0 +1,40 @@
+name: Fetch definitions from Notion
+
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: '0 11 * * *'  # 毎日20:00 JST
+
+jobs:
+  fetch-definitions:
+    runs-on: ubuntu-latest
+    # botによる自動コミットでは再実行しない
+    if: github.actor != 'github-actions[bot]'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.SYNC_PAT }}
+
+      - name: Install requests
+        run: pip install requests --quiet
+
+      - name: Fetch definitions from Notion and update CLAUDE.md
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NOTION_DEFINITION_DB_ID: ${{ secrets.NOTION_DEFINITION_DB_ID }}
+        run: python3 scripts/fetch_definitions.py
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet CLAUDE.md; then
+            git add CLAUDE.md
+            git commit -m "chore: Notionから定義を自動更新"
+            git push origin main
+          else
+            echo "変更なし、スキップ"
+          fi
