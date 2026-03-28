@@ -228,24 +228,19 @@ jobs:
           note_key = note_data.get("data", {}).get("key", "")
           print(f"note id: {note_id}, key: {note_key}")
 
-          # ステップ2: 本文をPATCHで更新
-          patch_res = session.patch(
+          # ステップ2: PUTで本文・公開日時・ステータスを更新
+          put_res = session.put(
               f"https://note.com/api/v1/text_notes/{note_id}",
               json={
                   "name": article_title,
                   "body": article_content,
-                  "price": 0
+                  "status": "published",
+                  "price": 0,
+                  "publish_at": publish_at
               }
           )
-          print(f"note patch HTTP: {patch_res.status_code}")
-
-          # ステップ3: 公開
-          publish_res = session.post(
-              f"https://note.com/api/v1/text_notes/{note_id}/publish",
-              json={"publish_at": publish_at}
-          )
-          print(f"note publish HTTP: {publish_res.status_code}")
-          print(f"note publish response: {publish_res.text[:300]}")
+          print(f"note put HTTP: {put_res.status_code}")
+          print(f"note put response: {put_res.text[:300]}")
 
           post_url = f"https://note.com/{NOTE_USER_URLNAME}/n/{note_key}"
           print(f"記事投稿成功: {post_url}")
