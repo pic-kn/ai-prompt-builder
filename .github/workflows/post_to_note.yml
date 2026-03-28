@@ -165,7 +165,7 @@ jobs:
           )
 
           res = gemini_client.models.generate_content(
-              model="gemini-2.0-flash",
+              model="gemini-1.5-flash",
               contents=prompt,
               config=types.GenerateContentConfig(
                   thinking_config=types.ThinkingConfig(thinking_budget=0)
@@ -280,7 +280,7 @@ jobs:
           )
 
           x_res = gemini_client.models.generate_content(
-              model="gemini-2.0-flash",
+              model="gemini-1.5-flash",
               contents=x_prompt,
               config=types.GenerateContentConfig(
                   thinking_config=types.ThinkingConfig(thinking_budget=0)
