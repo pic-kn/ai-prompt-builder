@@ -231,7 +231,7 @@ jobs:
           )
 
           print(f"note create HTTP: {note_res.status_code}")
-          print(f"note create response: {note_res.text[:500]}")
+          print(f"note create response FULL: {note_res.text}")
 
           if note_res.status_code not in (200, 201):
               print(f"note create error: {note_res.text}")
@@ -257,10 +257,7 @@ jobs:
               }
           )
           print(f"note put HTTP: {put_res.status_code}")
-          print(f"note put response: {put_res.text[:300]}")
-
-          if put_res.status_code not in (200, 201):
-              print(f"note put 失敗（422の場合は下書きとして保存済み）: {put_res.text[:300]}")
+          print(f"note put response FULL: {put_res.text}")
 
           post_url = f"https://note.com/{NOTE_USER_URLNAME}/n/{note_key}"
           print(f"記事URL: {post_url}")
