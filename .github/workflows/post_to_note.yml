@@ -227,7 +227,8 @@ jobs:
                       loc = page.locator(sel)
                       if loc.count() > 0:
                           loc.first.click()
-                          loc.first.fill(article_title)
+                          page.keyboard.press("Control+a")
+                          page.keyboard.type(article_title)
                           print(f"タイトル入力完了: {sel}")
                           title_filled = True
                           break
@@ -279,24 +280,24 @@ jobs:
                   # パネルのアニメーション完了を待つ（重要）
                   page.wait_for_timeout(3000)
 
-                  # 現在表示されているボタンを全て出力（デバッグ）
+                  # 全ボタンを出力（visible限定なし）
                   try:
-                      visible_btns = page.locator('button:visible').all_text_contents()
-                      print(f"表示中のボタン: {visible_btns}")
+                      all_btns = page.locator('button').all_text_contents()
+                      print(f"全ボタン: {all_btns}")
                   except:
                       pass
 
-                  # ステップ2: パネル内の「投稿」ボタン（.lastで最後＝パネル内のボタンを狙う）
+                  # ステップ2: パネル内の確認ボタン（wait_for_selectorで出現を待つ）
                   submitted = False
-                  for confirm_text in ["投稿する", "公開する", "今すぐ公開", "投稿", "公開"]:
+                  for confirm_text in ["投稿する", "公開する", "今すぐ公開", "投稿"]:
                       try:
+                          page.wait_for_selector(f'button:has-text("{confirm_text}")', timeout=5000)
                           confirm = page.locator(f'button:has-text("{confirm_text}")')
-                          if confirm.count() > 0 and confirm.last.is_visible():
-                              confirm.last.click()
-                              print(f"投稿確認クリック: {confirm_text}")
-                              page.wait_for_timeout(3000)
-                              submitted = True
-                              break
+                          confirm.last.click()
+                          print(f"投稿確認クリック: {confirm_text}")
+                          page.wait_for_timeout(3000)
+                          submitted = True
+                          break
                       except:
                           pass
 
