@@ -12,7 +12,7 @@ jobs:
     steps:
       - name: Install dependencies
         run: |
-          pip install requests google-genai tweepy playwright -q
+          pip install requests google-genai tweepy playwright anthropic -q
           playwright install chromium --with-deps
 
       - name: Generate and post article
@@ -24,6 +24,7 @@ jobs:
           NOTE_USER_URLNAME: ${{ secrets.NOTE_USER_URLNAME }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           X_API_KEY: ${{ secrets.X_API_KEY }}
           X_API_SECRET: ${{ secrets.X_API_SECRET }}
           X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
@@ -46,6 +47,7 @@ jobs:
           NOTE_USER_URLNAME = os.environ["NOTE_USER_URLNAME"]
           GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
           GEMINI_API_KEY_2 = os.environ.get("GEMINI_API_KEY_2", "")
+          ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
           X_API_KEY = os.environ["X_API_KEY"]
           X_API_SECRET = os.environ["X_API_SECRET"]
           X_ACCESS_TOKEN = os.environ["X_ACCESS_TOKEN"]
@@ -66,8 +68,21 @@ jobs:
                       )
                       return res.text.strip()
                   except Exception as e:
-                      print(f"APIキー切り替え: {e}")
-              raise Exception("すべてのGemini APIキーが失敗しました")
+                      print(f"Gemini APIキー切り替え: {e}")
+              if ANTHROPIC_API_KEY:
+                  try:
+                      import anthropic
+                      client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+                      res = client.messages.create(
+                          model="claude-haiku-4-5-20251014",
+                          max_tokens=4096,
+                          messages=[{"role": "user", "content": prompt}]
+                      )
+                      print("Claude APIにフォールバック")
+                      return res.content[0].text.strip()
+                  except Exception as e:
+                      print(f"Claude APIも失敗: {e}")
+              raise Exception("すべてのAPIキーが失敗しました")
 
           notion_headers = {
               "Authorization": f"Bearer {NOTION_API_KEY}",
