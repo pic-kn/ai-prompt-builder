@@ -246,16 +246,26 @@ jobs:
               print("note idが取得できませんでした")
               exit(1)
 
-          # ステップ2: PUTでステータスを「公開」に変更
-          # note.com APIのstatusは "public" を試す（"published"は422になる場合がある）
-          put_res = session.put(
-              f"https://note.com/api/v1/text_notes/{note_id}",
-              json={
-                  "name": article_title,
-                  "status": "public",
-                  "price": 0
-              }
-          )
+          # ステップ2: GETで現在のnote状態を取得し、全フィールドを把握した上でPUT
+          get_res = session.get(f"https://note.com/api/v1/text_notes/{note_id}")
+          print(f"note get HTTP: {get_res.status_code}")
+          if get_res.status_code == 200:
+              note_current = get_res.json().get("data", {})
+              print(f"note current status: {note_current.get('status')}")
+              print(f"note current body length: {len(str(note_current.get('body', '')))}")
+              # 既存フィールドをそのまま使い、statusだけ変更してPUT
+              note_current["status"] = "published"
+              put_res = session.put(
+                  f"https://note.com/api/v1/text_notes/{note_id}",
+                  json=note_current
+              )
+          else:
+              print(f"note get error: {get_res.text}")
+              # フォールバック: シンプルなPUT
+              put_res = session.put(
+                  f"https://note.com/api/v1/text_notes/{note_id}",
+                  json={"name": article_title, "status": "published", "price": 0}
+              )
           print(f"note put HTTP: {put_res.status_code}")
           print(f"note put response FULL: {put_res.text}")
 
