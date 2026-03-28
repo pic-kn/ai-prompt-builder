@@ -32,6 +32,7 @@ jobs:
           python3 << 'PYEOF'
           import os
           import re
+          import sys
           import requests
           import unicodedata
           import tweepy
@@ -175,7 +176,11 @@ jobs:
               "本文をここに"
           )
 
-          output = generate_with_fallback(prompt)
+          try:
+              output = generate_with_fallback(prompt)
+          except Exception as e:
+              print(f"Gemini API失敗のためスキップ: {e}")
+              sys.exit(0)
           title_match = re.search(r"TITLE:\s*(.+)", output)
           content_match = re.search(r"CONTENT:\n([\s\S]+)", output)
 
