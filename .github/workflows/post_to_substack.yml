@@ -1,4 +1,4 @@
-name: Post Project Article to Beehiiv
+name: Post Project Article to Substack
 
 on:
   schedule:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  post-to-beehiiv:
+  post-to-substack:
     runs-on: ubuntu-latest
 
     steps:
@@ -15,8 +15,8 @@ jobs:
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
           NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
           NOTION_PROJECT_DB_ID: ${{ secrets.NOTION_PROJECT_DB_ID }}
-          BEEHIIV_API_KEY: ${{ secrets.BEEHIIV_API_KEY }}
-          BEEHIIV_PUBLICATION_ID: ${{ secrets.BEEHIIV_PUBLICATION_ID }}
+          SUBSTACK_COOKIE: ${{ secrets.SUBSTACK_COOKIE }}
+          SUBSTACK_SUBDOMAIN: ${{ secrets.SUBSTACK_SUBDOMAIN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           X_API_KEY: ${{ secrets.X_API_KEY }}
           X_API_SECRET: ${{ secrets.X_API_SECRET }}
@@ -37,8 +37,8 @@ jobs:
           NOTION_API_KEY = os.environ["NOTION_API_KEY"]
           NOTION_DATABASE_ID = os.environ["NOTION_DATABASE_ID"]
           NOTION_PROJECT_DB_ID = os.environ["NOTION_PROJECT_DB_ID"]
-          BEEHIIV_API_KEY = os.environ["BEEHIIV_API_KEY"]
-          BEEHIIV_PUBLICATION_ID = os.environ["BEEHIIV_PUBLICATION_ID"]
+          SUBSTACK_COOKIE = os.environ["SUBSTACK_COOKIE"]
+          SUBSTACK_SUBDOMAIN = os.environ["SUBSTACK_SUBDOMAIN"]
           GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
           X_API_KEY = os.environ["X_API_KEY"]
           X_API_SECRET = os.environ["X_API_SECRET"]
@@ -50,6 +50,14 @@ jobs:
               "Content-Type": "application/json",
               "Notion-Version": "2022-06-28"
           }
+
+          substack_headers = {
+              "Cookie": f"substack.sid={SUBSTACK_COOKIE}",
+              "Content-Type": "application/json",
+              "User-Agent": "Mozilla/5.0"
+          }
+
+          substack_base = f"https://{SUBSTACK_SUBDOMAIN}.substack.com"
 
           # 1. プロジェクト管理DBから「完了」プロジェクトを取得
           project_res = requests.post(
@@ -74,7 +82,6 @@ jobs:
           project_id = project_page["id"]
           props = project_page["properties"]
 
-          # タイトルプロパティを動的に取得
           project_name = ""
           for key, val in props.items():
               if val.get("type") == "title" and val.get("title"):
@@ -136,14 +143,14 @@ jobs:
           gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 
           prompt = (
-              "あなたはAIです。開発者のかいさんの代わりに、AIとして開発記録を記事として書いてください。\n\n"
+              "あなたはAIです。開発者のかいさんの代わりに、AIとして開発記録をSubstack記事として書いてください。\n\n"
               f"プロジェクト名：{project_name}\n"
               f"開発ログ（{len(logs)}件）：\n\n{logs_text}\n\n"
               "上記の開発ログをもとに、読者が読みたくなる記事を書いてください。\n\n"
               "条件：\n"
               "- AIが主語で自然な語り口\n"
               "- 技術用語（Notion、GitHub等）はそのまま使い、難しい説明は平易に\n"
-              "- HTMLで出力（<h2><p><ul><li>等を使用）\n"
+              "- HTMLで出力（<h2><p><ul><li>等を使用、<html><body>タグは不要）\n"
               "- 2000〜4000字程度\n"
               "- ハッシュタグ不要\n\n"
               "出力形式（この形式を厳守）：\n"
@@ -169,35 +176,52 @@ jobs:
 
           print(f"記事タイトル: {article_title}")
 
-          # 5. Beehiiv APIで記事を投稿
-          beehiiv_headers = {
-              "Authorization": f"Bearer {BEEHIIV_API_KEY}",
-              "Content-Type": "application/json"
-          }
-
-          beehiiv_res = requests.post(
-              f"https://api.beehiiv.com/v2/publications/{BEEHIIV_PUBLICATION_ID}/posts",
-              headers=beehiiv_headers,
+          # 5. Substackにドラフトを作成
+          draft_res = requests.post(
+              f"{substack_base}/api/v1/drafts",
+              headers=substack_headers,
               json={
-                  "title": article_title,
-                  "content_html": article_content,
-                  "status": "confirmed",
-                  "audience": "free"
+                  "draft_title": article_title,
+                  "draft_subtitle": f"{project_name}の開発記録",
+                  "draft_body": article_content,
+                  "draft_podcast_url": "",
+                  "draft_podcast_duration": None
               }
           )
 
-          print(f"Beehiiv HTTP: {beehiiv_res.status_code}")
+          print(f"Substack draft HTTP: {draft_res.status_code}")
 
-          if beehiiv_res.status_code not in (200, 201):
-              print(f"Beehiiv error: {beehiiv_res.text}")
+          if draft_res.status_code not in (200, 201):
+              print(f"Substack draft error: {draft_res.text}")
               exit(1)
 
-          beehiiv_data = beehiiv_res.json()
-          post_data = beehiiv_data.get("data", {})
-          post_url = post_data.get("web_url") or post_data.get("url") or ""
-          print(f"記事投稿成功: {post_url}")
+          draft_data = draft_res.json()
+          draft_id = draft_data.get("id")
+          print(f"ドラフト作成成功: ID={draft_id}")
 
-          # 6. Xに告知スレッドを投稿
+          # 6. ドラフトを公開
+          publish_res = requests.post(
+              f"{substack_base}/api/v1/drafts/{draft_id}/publish",
+              headers=substack_headers,
+              json={
+                  "send_email": True,
+                  "share_automatically": False,
+                  "is_free": True
+              }
+          )
+
+          print(f"Substack publish HTTP: {publish_res.status_code}")
+
+          if publish_res.status_code not in (200, 201):
+              print(f"Substack publish error: {publish_res.text}")
+              exit(1)
+
+          publish_data = publish_res.json()
+          post_slug = publish_data.get("slug") or draft_data.get("slug") or str(draft_id)
+          post_url = f"{substack_base}/p/{post_slug}"
+          print(f"記事公開成功: {post_url}")
+
+          # 7. Xに告知ツイートを投稿
           def tweet_length(text):
               count = 0
               for c in text:
@@ -220,7 +244,7 @@ jobs:
               return result
 
           x_prompt = (
-              "あなたはAIです。開発者のかいさんの代わりに、プロジェクト完了の告知をXに投稿します。\n\n"
+              "あなたはAIです。開発者のかいさんの代わりに、プロジェクト完了記事の告知をXに投稿します。\n\n"
               f"プロジェクト：{project_name}\n"
               f"記事URL：{post_url}\n"
               f"開発ログ数：{len(logs)}件\n\n"
@@ -258,7 +282,7 @@ jobs:
           except tweepy.TweepyException as e:
               print(f"X投稿失敗: {e}")
 
-          # 7. プロジェクトステータスを「完了」→「投稿済み」に更新、beehiivリンクも保存
+          # 8. Notionプロジェクトを「投稿済み」に更新
           update_props = {"ステータス": {"status": {"name": "投稿済み"}}}
           if post_url:
               update_props["beehiivリンク"] = {"url": post_url}
