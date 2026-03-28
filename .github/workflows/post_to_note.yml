@@ -179,7 +179,24 @@ jobs:
 
           print(f"記事タイトル: {article_title}")
 
-          # 5. Playwrightでnote.comに記事を投稿
+          # 5a. アイキャッチ画像をUnsplashからダウンロード
+          try:
+              kw_prompt = f"次の記事タイトルに合う英語キーワードを2つカンマ区切りで出力（例: technology,github）\nタイトル：{article_title}\nキーワードのみ出力"
+              keywords = generate_with_fallback(kw_prompt).strip().replace(' ', '').replace('\n', '')
+              print(f"画像キーワード: {keywords}")
+              img_res = requests.get(
+                  f"https://source.unsplash.com/1280x720/?{keywords}",
+                  allow_redirects=True, timeout=15
+              )
+              eyecatch_path = "/tmp/eyecatch.jpg"
+              with open(eyecatch_path, "wb") as f:
+                  f.write(img_res.content)
+              print(f"アイキャッチ画像ダウンロード完了 ({len(img_res.content)} bytes)")
+          except Exception as e:
+              print(f"アイキャッチダウンロード失敗（スキップ）: {e}")
+              eyecatch_path = None
+
+          # 5b. Playwrightでnote.comに記事を投稿
           from playwright.sync_api import sync_playwright
 
           post_url = ""
@@ -279,6 +296,33 @@ jobs:
 
                   # パネルのアニメーション完了を待つ（重要）
                   page.wait_for_timeout(3000)
+
+                  # アイキャッチ画像をアップロード
+                  if eyecatch_path:
+                      try:
+                          for sel in [
+                              'input[type="file"][accept*="image"]',
+                              'input[type="file"]',
+                              '[class*="eyecatch"] input',
+                              '[class*="EyeCatch"] input',
+                          ]:
+                              if page.locator(sel).count() > 0:
+                                  page.locator(sel).first.set_input_files(eyecatch_path)
+                                  page.wait_for_timeout(2000)
+                                  print(f"アイキャッチアップロード完了: {sel}")
+                                  break
+                          else:
+                              # file inputが見つからない場合はfile chooserで試みる
+                              for btn_sel in ['button:has-text("アイキャッチ")', '[class*="eyecatch"]', '[class*="cover"]']:
+                                  if page.locator(btn_sel).count() > 0:
+                                      with page.expect_file_chooser(timeout=5000) as fc:
+                                          page.locator(btn_sel).first.click()
+                                      fc.value.set_files(eyecatch_path)
+                                      page.wait_for_timeout(2000)
+                                      print(f"アイキャッチアップロード完了: {btn_sel}")
+                                      break
+                      except Exception as e:
+                          print(f"アイキャッチアップロードエラー（スキップ）: {e}")
 
                   # 全ボタンを出力（visible限定なし）
                   try:
