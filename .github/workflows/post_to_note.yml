@@ -206,7 +206,7 @@ jobs:
 
               print("note.com 記事作成ページを開く...")
               page.goto("https://note.com/notes/new", wait_until="domcontentloaded")
-              page.wait_for_timeout(3000)
+              page.wait_for_timeout(5000)
               print(f"現在のURL: {page.url}")
 
               if "login" in page.url or "signup" in page.url:
@@ -214,27 +214,47 @@ jobs:
                   browser.close()
                   exit(1)
 
-              # タイトル入力
-              try:
-                  page.wait_for_selector('[contenteditable="true"]', timeout=10000)
-                  editors = page.locator('[contenteditable="true"]')
-                  editors.first.click()
-                  page.keyboard.type(article_title)
-                  print("タイトル入力完了")
-              except Exception as e:
-                  print(f"タイトル入力エラー: {e}")
+              # editor URLからnote keyを早期取得（公開URLの構成に使う）
+              note_key_match = re.search(r'/notes/([a-z0-9]+)', page.url)
+              note_key = note_key_match.group(1) if note_key_match else ""
+              print(f"note key: {note_key}")
+
+              # タイトル入力（inputを優先、なければcontenteditable）
+              title_filled = False
+              for sel in ['input[placeholder*="タイトル"]', 'input[name="title"]',
+                          'textarea[placeholder*="タイトル"]', '.title-input input']:
+                  try:
+                      loc = page.locator(sel)
+                      if loc.count() > 0:
+                          loc.first.click()
+                          loc.first.fill(article_title)
+                          print(f"タイトル入力完了: {sel}")
+                          title_filled = True
+                          break
+                  except:
+                      pass
+
+              if not title_filled:
+                  try:
+                      editors = page.locator('[contenteditable="true"]')
+                      editors.first.click()
+                      page.keyboard.type(article_title)
+                      page.keyboard.press("Tab")
+                      print("タイトル入力完了: contenteditable")
+                      title_filled = True
+                  except Exception as e:
+                      print(f"タイトル入力エラー: {e}")
 
               page.wait_for_timeout(500)
 
-              # 本文入力（2番目のcontenteditable = 本文エリア）
+              # 本文入力（contenteditable の中でタイトル以外）
               try:
                   editors = page.locator('[contenteditable="true"]')
                   count = editors.count()
                   print(f"エディタ要素数: {count}")
                   body_editor = editors.nth(1) if count > 1 else editors.first
                   body_editor.click()
-                  page.wait_for_timeout(500)
-                  # 8000文字を超える場合は切り詰め
+                  page.wait_for_timeout(300)
                   page.keyboard.type(article_body[:8000])
                   print(f"本文入力完了 ({min(len(article_body), 8000)}文字)")
               except Exception as e:
@@ -242,39 +262,46 @@ jobs:
 
               page.wait_for_timeout(1000)
 
-              # 公開ボタンをクリック
+              # 公開フロー（公開設定ボタン → 投稿ボタン の2段階）
               try:
-                  publish_btn = page.locator('button').filter(has_text=re.compile(r'公開|投稿|publish', re.IGNORECASE)).first
-                  publish_btn.wait_for(state="visible", timeout=10000)
-                  publish_btn.click()
-                  print("公開ボタンクリック")
-                  page.wait_for_timeout(2000)
+                  # ステップ1: 公開設定ボタン
+                  for btn_text in ["公開設定", "公開する", "投稿", "公開"]:
+                      btn = page.locator(f'button:has-text("{btn_text}")').first
+                      if btn.count() > 0:
+                          try:
+                              btn.wait_for(state="visible", timeout=5000)
+                              btn.click()
+                              print(f"公開設定ボタンクリック: {btn_text}")
+                              page.wait_for_timeout(2000)
+                              break
+                          except:
+                              pass
 
-                  # 確認ダイアログ
-                  for confirm_text in ["投稿する", "公開する", "今すぐ公開", "確認"]:
-                      confirm_btn = page.locator(f'button:has-text("{confirm_text}")')
-                      if confirm_btn.count() > 0 and confirm_btn.first.is_visible():
-                          confirm_btn.first.click()
-                          print(f"確認ダイアログ: {confirm_text}")
-                          break
+                  # ステップ2: 確認モーダルの投稿ボタン
+                  for confirm_text in ["投稿する", "公開する", "今すぐ公開", "投稿", "公開"]:
+                      confirm = page.locator(f'button:has-text("{confirm_text}")').first
+                      if confirm.count() > 0:
+                          try:
+                              if confirm.is_visible():
+                                  confirm.click()
+                                  print(f"投稿確認クリック: {confirm_text}")
+                                  page.wait_for_timeout(3000)
+                                  break
+                          except:
+                              pass
 
-                  page.wait_for_load_state("networkidle", timeout=15000)
-                  final_url = page.url
-                  print(f"最終URL: {final_url}")
-
-                  m = re.search(r'/n/([a-z0-9]+)', final_url)
-                  if m:
-                      post_url = f"https://note.com/{NOTE_USER_URLNAME}/n/{m.group(1)}"
-                  elif "notes/new" not in final_url:
-                      post_url = final_url
+                  print(f"最終URL: {page.url}")
 
               except Exception as e:
                   print(f"公開エラー: {e}")
 
               browser.close()
 
+          # note keyから公開URLを構成（editor URLに依存しない）
+          if note_key:
+              post_url = f"https://note.com/{NOTE_USER_URLNAME}/n/{note_key}"
           if not post_url:
-              print("note投稿失敗: URLを取得できませんでした")
+              print("note投稿失敗: note keyを取得できませんでした")
               exit(1)
 
           print(f"記事投稿成功: {post_url}")
