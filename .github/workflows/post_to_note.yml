@@ -181,30 +181,28 @@ jobs:
 
           print(f"記事タイトル: {article_title}")
 
-          # 5. CSRFトークンを取得してnoteに記事を投稿
-          csrf_res = requests.get(
-              "https://note.com/api/v2/current_user",
-              headers=note_headers
-          )
-          print(f"CSRF取得 HTTP: {csrf_res.status_code}")
-
-          csrf_token = ""
-          if csrf_res.status_code == 200:
-              csrf_token = csrf_res.headers.get("X-CSRF-Token", "")
-
-          # Cookieヘッダーを更新（Set-Cookieからセッションを引き継ぐ）
+          # 5. noteに記事を投稿（セッションでクッキーを正しく管理）
           session = requests.Session()
-          session.headers.update(note_headers)
-          session.get("https://note.com/api/v2/current_user")
+          session.cookies.set("_note_session_v5", NOTE_SESSION, domain=".note.com")
+          session.headers.update({
+              "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+              "Accept": "application/json, text/plain, */*",
+              "Content-Type": "application/json",
+              "Origin": "https://note.com",
+              "Referer": "https://note.com/notes/new",
+              "X-Requested-With": "XMLHttpRequest",
+              "sec-fetch-dest": "empty",
+              "sec-fetch-mode": "cors",
+              "sec-fetch-site": "same-origin"
+          })
 
-          post_headers = dict(note_headers)
-          if csrf_token:
-              post_headers["X-CSRF-Token"] = csrf_token
-          post_headers["X-Requested-With"] = "XMLHttpRequest"
+          # ログインユーザー確認
+          me_res = session.get("https://note.com/api/v2/current_user")
+          print(f"ログイン確認 HTTP: {me_res.status_code}")
+          print(f"ログイン確認 response: {me_res.text[:200]}")
 
           note_res = session.post(
               "https://note.com/api/v1/text_notes",
-              headers=post_headers,
               json={
                   "name": article_title,
                   "body": article_content,
@@ -215,7 +213,7 @@ jobs:
           )
 
           print(f"note HTTP: {note_res.status_code}")
-          print(f"note response: {note_res.text[:500]}")
+          print(f"note response: {note_res.text[:1000]}")
 
           if note_res.status_code not in (200, 201):
               print(f"note error: {note_res.text}")
