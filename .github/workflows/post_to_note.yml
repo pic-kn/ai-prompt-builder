@@ -262,33 +262,46 @@ jobs:
 
               page.wait_for_timeout(1000)
 
-              # 公開フロー（公開設定ボタン → 投稿ボタン の2段階）
+              # 公開フロー（公開設定ボタン → パネルが開く → 投稿ボタン の2段階）
               try:
-                  # ステップ1: 公開設定ボタン
-                  for btn_text in ["公開設定", "公開する", "投稿", "公開"]:
+                  # ステップ1: 右上の「公開」ボタン
+                  for btn_text in ["公開設定", "公開する", "公開", "投稿"]:
                       btn = page.locator(f'button:has-text("{btn_text}")').first
                       if btn.count() > 0:
                           try:
                               btn.wait_for(state="visible", timeout=5000)
                               btn.click()
                               print(f"公開設定ボタンクリック: {btn_text}")
-                              page.wait_for_timeout(2000)
                               break
                           except:
                               pass
 
-                  # ステップ2: 確認モーダルの投稿ボタン
+                  # パネルのアニメーション完了を待つ（重要）
+                  page.wait_for_timeout(3000)
+
+                  # 現在表示されているボタンを全て出力（デバッグ）
+                  try:
+                      visible_btns = page.locator('button:visible').all_text_contents()
+                      print(f"表示中のボタン: {visible_btns}")
+                  except:
+                      pass
+
+                  # ステップ2: パネル内の「投稿」ボタン（.lastで最後＝パネル内のボタンを狙う）
+                  submitted = False
                   for confirm_text in ["投稿する", "公開する", "今すぐ公開", "投稿", "公開"]:
-                      confirm = page.locator(f'button:has-text("{confirm_text}")').first
-                      if confirm.count() > 0:
-                          try:
-                              if confirm.is_visible():
-                                  confirm.click()
-                                  print(f"投稿確認クリック: {confirm_text}")
-                                  page.wait_for_timeout(3000)
-                                  break
-                          except:
-                              pass
+                      try:
+                          confirm = page.locator(f'button:has-text("{confirm_text}")')
+                          if confirm.count() > 0 and confirm.last.is_visible():
+                              confirm.last.click()
+                              print(f"投稿確認クリック: {confirm_text}")
+                              page.wait_for_timeout(3000)
+                              submitted = True
+                              break
+                      except:
+                          pass
+
+                  if not submitted:
+                      print("確認ボタンが見つかりませんでした")
 
                   print(f"最終URL: {page.url}")
 
