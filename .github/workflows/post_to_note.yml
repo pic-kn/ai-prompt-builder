@@ -1,4 +1,4 @@
-name: Post Project Article to Substack
+name: Post Project Article to note
 
 on:
   schedule:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  post-to-substack:
+  post-to-note:
     runs-on: ubuntu-latest
 
     steps:
@@ -15,8 +15,8 @@ jobs:
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
           NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
           NOTION_PROJECT_DB_ID: ${{ secrets.NOTION_PROJECT_DB_ID }}
-          SUBSTACK_COOKIE: ${{ secrets.SUBSTACK_COOKIE }}
-          SUBSTACK_SUBDOMAIN: ${{ secrets.SUBSTACK_SUBDOMAIN }}
+          NOTE_SESSION: ${{ secrets.NOTE_SESSION }}
+          NOTE_USER_URLNAME: ${{ secrets.NOTE_USER_URLNAME }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           X_API_KEY: ${{ secrets.X_API_KEY }}
           X_API_SECRET: ${{ secrets.X_API_SECRET }}
@@ -37,8 +37,8 @@ jobs:
           NOTION_API_KEY = os.environ["NOTION_API_KEY"]
           NOTION_DATABASE_ID = os.environ["NOTION_DATABASE_ID"]
           NOTION_PROJECT_DB_ID = os.environ["NOTION_PROJECT_DB_ID"]
-          SUBSTACK_COOKIE = os.environ["SUBSTACK_COOKIE"]
-          SUBSTACK_SUBDOMAIN = os.environ["SUBSTACK_SUBDOMAIN"]
+          NOTE_SESSION = os.environ["NOTE_SESSION"]
+          NOTE_USER_URLNAME = os.environ["NOTE_USER_URLNAME"]
           GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
           X_API_KEY = os.environ["X_API_KEY"]
           X_API_SECRET = os.environ["X_API_SECRET"]
@@ -51,23 +51,17 @@ jobs:
               "Notion-Version": "2022-06-28"
           }
 
-          substack_headers = {
-              "Cookie": f"substack.sid={SUBSTACK_COOKIE}",
+          note_headers = {
+              "Cookie": f"_note_session_v5={NOTE_SESSION}",
               "Content-Type": "application/json",
               "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-              "Accept": "application/json",
-              "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
-              "Origin": f"https://{SUBSTACK_SUBDOMAIN}.substack.com",
-              "Referer": f"https://{SUBSTACK_SUBDOMAIN}.substack.com/",
-              "sec-ch-ua": '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
-              "sec-ch-ua-mobile": "?0",
-              "sec-ch-ua-platform": '"macOS"',
+              "Accept": "application/json, text/plain, */*",
+              "Origin": "https://note.com",
+              "Referer": "https://note.com/",
               "sec-fetch-dest": "empty",
               "sec-fetch-mode": "cors",
               "sec-fetch-site": "same-origin"
           }
-
-          substack_base = f"https://{SUBSTACK_SUBDOMAIN}.substack.com"
 
           # 1. プロジェクト管理DBから「完了」プロジェクトを取得
           project_res = requests.post(
@@ -153,20 +147,20 @@ jobs:
           gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 
           prompt = (
-              "あなたはAIです。開発者のかいさんの代わりに、AIとして開発記録をSubstack記事として書いてください。\n\n"
+              "あなたはAIです。開発者のかいさんの代わりに、AIとして開発記録をnote記事として書いてください。\n\n"
               f"プロジェクト名：{project_name}\n"
               f"開発ログ（{len(logs)}件）：\n\n{logs_text}\n\n"
               "上記の開発ログをもとに、読者が読みたくなる記事を書いてください。\n\n"
               "条件：\n"
               "- AIが主語で自然な語り口\n"
               "- 技術用語（Notion、GitHub等）はそのまま使い、難しい説明は平易に\n"
-              "- HTMLで出力（<h2><p><ul><li>等を使用、<html><body>タグは不要）\n"
+              "- プレーンテキストで出力（HTMLタグは使わない、改行で段落を分ける）\n"
               "- 2000〜4000字程度\n"
               "- ハッシュタグ不要\n\n"
               "出力形式（この形式を厳守）：\n"
               "TITLE: タイトルをここに\n"
               "CONTENT:\n"
-              "<html本文をここに>"
+              "本文をここに"
           )
 
           res = gemini_client.models.generate_content(
@@ -182,56 +176,35 @@ jobs:
           content_match = re.search(r"CONTENT:\n([\s\S]+)", output)
 
           article_title = title_match.group(1).strip() if title_match else project_name
-          article_content = content_match.group(1).strip() if content_match else f"<p>{output}</p>"
+          article_content = content_match.group(1).strip() if content_match else output
 
           print(f"記事タイトル: {article_title}")
 
-          # 5. Substackにドラフトを作成
-          draft_res = requests.post(
-              f"{substack_base}/api/v1/drafts",
-              headers=substack_headers,
+          # 5. noteに記事を投稿
+          note_res = requests.post(
+              "https://note.com/api/v1/text_notes",
+              headers=note_headers,
               json={
-                  "draft_title": article_title,
-                  "draft_subtitle": f"{project_name}の開発記録",
-                  "draft_body": article_content,
-                  "draft_podcast_url": "",
-                  "draft_podcast_duration": None
+                  "name": article_title,
+                  "body": article_content,
+                  "status": "published",
+                  "price": 0
               }
           )
 
-          print(f"Substack draft HTTP: {draft_res.status_code}")
+          print(f"note HTTP: {note_res.status_code}")
+          print(f"note response: {note_res.text[:500]}")
 
-          if draft_res.status_code not in (200, 201):
-              print(f"Substack draft error: {draft_res.text}")
+          if note_res.status_code not in (200, 201):
+              print(f"note error: {note_res.text}")
               exit(1)
 
-          draft_data = draft_res.json()
-          draft_id = draft_data.get("id")
-          print(f"ドラフト作成成功: ID={draft_id}")
+          note_data = note_res.json()
+          note_key = note_data.get("data", {}).get("key") or note_data.get("key", "")
+          post_url = f"https://note.com/{NOTE_USER_URLNAME}/n/{note_key}"
+          print(f"記事投稿成功: {post_url}")
 
-          # 6. ドラフトを公開
-          publish_res = requests.post(
-              f"{substack_base}/api/v1/drafts/{draft_id}/publish",
-              headers=substack_headers,
-              json={
-                  "send_email": True,
-                  "share_automatically": False,
-                  "is_free": True
-              }
-          )
-
-          print(f"Substack publish HTTP: {publish_res.status_code}")
-
-          if publish_res.status_code not in (200, 201):
-              print(f"Substack publish error: {publish_res.text}")
-              exit(1)
-
-          publish_data = publish_res.json()
-          post_slug = publish_data.get("slug") or draft_data.get("slug") or str(draft_id)
-          post_url = f"{substack_base}/p/{post_slug}"
-          print(f"記事公開成功: {post_url}")
-
-          # 7. Xに告知ツイートを投稿
+          # 6. Xに告知ツイートを投稿
           def tweet_length(text):
               count = 0
               for c in text:
@@ -292,7 +265,7 @@ jobs:
           except tweepy.TweepyException as e:
               print(f"X投稿失敗: {e}")
 
-          # 8. Notionプロジェクトを「投稿済み」に更新
+          # 7. Notionプロジェクトを「投稿済み」に更新
           update_props = {"ステータス": {"status": {"name": "投稿済み"}}}
           if post_url:
               update_props["beehiivリンク"] = {"url": post_url}
