@@ -218,14 +218,15 @@ jobs:
           jst = timezone(timedelta(hours=9))
           publish_at = datetime.now(jst).strftime("%Y-%m-%dT%H:%M:%S.000+09:00")
 
-          # ステップ1: 記事を作成（本文はbodyフィールド）
+          # ステップ1: 記事を作成（bodyにHTML本文を設定し、statusで公開を試みる）
           note_res = session.post(
               "https://note.com/api/v1/text_notes",
               json={
                   "name": article_title,
                   "body": article_content,
                   "price": 0,
-                  "is_paid": False
+                  "is_paid": False,
+                  "status": "published"
               }
           )
 
@@ -241,12 +242,15 @@ jobs:
           note_key = note_data.get("data", {}).get("key", "")
           print(f"note id: {note_id}, key: {note_key}")
 
-          # ステップ2: PUTで本文・公開日時・ステータスを更新
+          if not note_id:
+              print("note idが取得できませんでした")
+              exit(1)
+
+          # ステップ2: PUTでステータスを「公開」に変更（bodyは送らない）
           put_res = session.put(
               f"https://note.com/api/v1/text_notes/{note_id}",
               json={
                   "name": article_title,
-                  "body": article_content,
                   "status": "published",
                   "price": 0
               }
@@ -254,8 +258,11 @@ jobs:
           print(f"note put HTTP: {put_res.status_code}")
           print(f"note put response: {put_res.text[:300]}")
 
+          if put_res.status_code not in (200, 201):
+              print(f"note put 失敗（422の場合は下書きとして保存済み）: {put_res.text[:300]}")
+
           post_url = f"https://note.com/{NOTE_USER_URLNAME}/n/{note_key}"
-          print(f"記事投稿成功: {post_url}")
+          print(f"記事URL: {post_url}")
 
           # 6. Xに告知ツイートを投稿
           def tweet_length(text):
