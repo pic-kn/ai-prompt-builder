@@ -13,7 +13,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install requests google-genai tweepy playwright -q
-          playwright install chromium --with-deps -q
+          playwright install chromium --with-deps
 
       - name: Generate and post article
         env:
