@@ -16,6 +16,9 @@ jobs:
       - name: Install requests
         run: pip install requests --quiet
 
+      - name: Ensure latest main
+        run: git pull origin main
+
       - name: Fetch definitions from Notion and update CLAUDE.md
         env:
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
@@ -29,7 +32,6 @@ jobs:
           if ! git diff --quiet CLAUDE.md; then
             git add CLAUDE.md
             git commit -m "chore: Notionから定義を自動更新"
-            git pull --rebase origin main
             git push origin main
           else
             echo "変更なし、スキップ"
