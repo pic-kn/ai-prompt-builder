@@ -28,6 +28,10 @@ jobs:
           X_API_SECRET: ${{ secrets.X_API_SECRET }}
           X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
           X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
+          X_API_KEY_2: ${{ secrets.X_API_KEY_2 }}
+          X_API_SECRET_2: ${{ secrets.X_API_SECRET_2 }}
+          X_ACCESS_TOKEN_2: ${{ secrets.X_ACCESS_TOKEN_2 }}
+          X_ACCESS_TOKEN_SECRET_2: ${{ secrets.X_ACCESS_TOKEN_SECRET_2 }}
         run: |
           python3 << 'PYEOF'
           import os
@@ -162,12 +166,11 @@ jobs:
               "- 課題→解決→気づきの構成で、読み物として面白くなるよう書く\n"
               "- 技術用語（Notion、GitHub等）はそのまま使い、背景も簡潔に補足する\n"
               "- プレーンテキスト形式で出力（HTMLタグ・Markdownの#や*などの記号は一切使わない）\n"
-              "- 見出しは【見出しテキスト】の形式で書く（例：【課題の背景】）\n"
+              "- 見出しは行頭に「## 」を付けて書く（例：## 課題の背景）\n"
               "- 段落と段落の間は必ず1行空ける\n"
               "- 重要な概念や技術用語を強調したい場合は「」で囲む\n"
               "- 箇条書きは行頭に「・」を使う（例：・ポイント1）\n"
               "- 箇条書きを積極的に使って読みやすくする（手順・比較・まとめ等）\n"
-              "- 記事の冒頭（本文の最初）に目次を入れる。形式：【目次】の見出しの後に「・見出し名」を並べる\n"
               "- 2000〜4000字程度\n"
               "- ハッシュタグ不要\n\n"
               "出力形式（この形式を厳守）：\n"
@@ -417,11 +420,25 @@ jobs:
               access_token_secret=X_ACCESS_TOKEN_SECRET
           )
 
-          try:
-              r = x_client.create_tweet(text=tweet_text, user_auth=True)
-              print(f"X投稿成功! ID: {r.data['id']}")
-          except tweepy.TweepyException as e:
-              print(f"X投稿失敗: {e}")
+          x_posted = False
+          for x_creds in [
+              (X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET),
+              (os.environ.get("X_API_KEY_2",""), os.environ.get("X_API_SECRET_2",""),
+               os.environ.get("X_ACCESS_TOKEN_2",""), os.environ.get("X_ACCESS_TOKEN_SECRET_2","")),
+          ]:
+              if not all(x_creds):
+                  continue
+              try:
+                  xc = tweepy.Client(consumer_key=x_creds[0], consumer_secret=x_creds[1],
+                                     access_token=x_creds[2], access_token_secret=x_creds[3])
+                  r = xc.create_tweet(text=tweet_text, user_auth=True)
+                  print(f"X投稿成功! ID: {r.data['id']}")
+                  x_posted = True
+                  break
+              except tweepy.TweepyException as e:
+                  print(f"X投稿失敗（次のキーを試す）: {e}")
+          if not x_posted:
+              print("X投稿失敗: 全APIキーが失敗しました")
 
           # 7. Notionプロジェクトを「投稿済み」に更新
           update_props = {"ステータス": {"status": {"name": "投稿済み"}}}
