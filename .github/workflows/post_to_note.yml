@@ -184,22 +184,22 @@ jobs:
 
           print(f"記事タイトル: {article_title}")
 
-          # 5a. アイキャッチ画像をUnsplashからダウンロード
+          # 5a. アイキャッチ画像をpicsum.photosからダウンロード（APIキー不要）
+          eyecatch_path = None
           try:
-              kw_prompt = f"次の記事タイトルに合う英語キーワードを2つカンマ区切りで出力（例: technology,github）\nタイトル：{article_title}\nキーワードのみ出力"
-              keywords = generate_with_fallback(kw_prompt).strip().replace(' ', '').replace('\n', '')
-              print(f"画像キーワード: {keywords}")
               img_res = requests.get(
-                  f"https://source.unsplash.com/1280x720/?{keywords}",
+                  "https://picsum.photos/1280/720",
                   allow_redirects=True, timeout=15
               )
-              eyecatch_path = "/tmp/eyecatch.jpg"
-              with open(eyecatch_path, "wb") as f:
-                  f.write(img_res.content)
-              print(f"アイキャッチ画像ダウンロード完了 ({len(img_res.content)} bytes)")
+              if img_res.status_code == 200 and len(img_res.content) > 10000:
+                  eyecatch_path = "/tmp/eyecatch.jpg"
+                  with open(eyecatch_path, "wb") as f:
+                      f.write(img_res.content)
+                  print(f"アイキャッチ画像ダウンロード完了 ({len(img_res.content)} bytes)")
+              else:
+                  print(f"アイキャッチダウンロード失敗: status={img_res.status_code}, size={len(img_res.content)}")
           except Exception as e:
               print(f"アイキャッチダウンロード失敗（スキップ）: {e}")
-              eyecatch_path = None
 
           # 5b. Playwrightでnote.comに記事を投稿
           from playwright.sync_api import sync_playwright
@@ -244,25 +244,44 @@ jobs:
               # アイキャッチ画像をエディタ画面でアップロード（タイトル入力前）
               if eyecatch_path:
                   try:
-                      # 隠しfile inputを直接探す
+                      page.wait_for_timeout(2000)
+                      all_btns = page.locator('button').all()
+                      btn_texts = [b.inner_text() for b in all_btns[:30]]
+                      print(f"ページのボタン一覧: {btn_texts}")
+                      eyecatch_done = False
+                      # まず隠しfile inputを直接試す
                       file_inputs = page.locator('input[type="file"]')
                       if file_inputs.count() > 0:
                           file_inputs.first.set_input_files(eyecatch_path)
                           page.wait_for_timeout(2000)
                           print("アイキャッチアップロード完了（file input）")
-                      else:
-                          # ボタン経由で試みる
-                          for sel in ['[class*="eyecatch"]', '[class*="EyeCatch"]',
-                                      '[class*="cover"]', 'button:has-text("アイキャッチ")']:
+                          eyecatch_done = True
+                      if not eyecatch_done:
+                          for sel in [
+                              'button:has-text("ヘッダー画像")',
+                              'button:has-text("ヘッダー")',
+                              'button:has-text("アイキャッチ")',
+                              'button:has-text("画像を設定")',
+                              '[data-testid*="eyecatch"]',
+                              '[data-testid*="header"]',
+                              '[class*="eyecatch"]',
+                              '[class*="EyeCatch"]',
+                              '[class*="headerImage"]',
+                              '[class*="coverImage"]',
+                          ]:
                               if page.locator(sel).count() > 0:
-                                  with page.expect_file_chooser(timeout=5000) as fc:
-                                      page.locator(sel).first.click()
-                                  fc.value.set_files(eyecatch_path)
-                                  page.wait_for_timeout(2000)
-                                  print(f"アイキャッチアップロード完了: {sel}")
-                                  break
-                          else:
-                              print("アイキャッチのfile inputが見つかりません（スキップ）")
+                                  try:
+                                      with page.expect_file_chooser(timeout=5000) as fc:
+                                          page.locator(sel).first.click()
+                                      fc.value.set_files(eyecatch_path)
+                                      page.wait_for_timeout(3000)
+                                      print(f"アイキャッチアップロード完了: {sel}")
+                                      eyecatch_done = True
+                                      break
+                                  except Exception as inner_e:
+                                      print(f"  {sel} 失敗: {inner_e}")
+                      if not eyecatch_done:
+                          print("アイキャッチボタンが見つかりません（スキップ）")
                   except Exception as e:
                       print(f"アイキャッチエラー（スキップ）: {e}")
 
@@ -295,7 +314,7 @@ jobs:
 
               page.wait_for_timeout(500)
 
-              # 本文入力（contenteditable の中でタイトル以外）
+              # 本文入力（行ごとにEnterを打つことで ## → 見出しブロックの自動変換を有効化）
               try:
                   editors = page.locator('[contenteditable="true"]')
                   count = editors.count()
@@ -303,8 +322,15 @@ jobs:
                   body_editor = editors.nth(1) if count > 1 else editors.first
                   body_editor.click()
                   page.wait_for_timeout(300)
-                  page.keyboard.type(article_body[:8000])
-                  print(f"本文入力完了 ({min(len(article_body), 8000)}文字)")
+                  lines = article_body.split('\n')
+                  total = 0
+                  for line in lines:
+                      if total > 8000:
+                          break
+                      page.keyboard.type(line)
+                      page.keyboard.press('Enter')
+                      total += len(line) + 1
+                  print(f"本文入力完了 ({total}文字)")
               except Exception as e:
                   print(f"本文入力エラー: {e}")
 
@@ -403,28 +429,19 @@ jobs:
               "- 本文のみ出力"
           )
 
-          tweet_text = generate_with_fallback(x_prompt)
-          if tweet_length(tweet_text) > 280:
-              tweet_text = truncate_tweet(tweet_text)
-
-          print(f"Tweet ({tweet_length(tweet_text)} chars):\n{tweet_text}")
-
-          x_client = tweepy.Client(
-              consumer_key=X_API_KEY,
-              consumer_secret=X_API_SECRET,
-              access_token=X_ACCESS_TOKEN,
-              access_token_secret=X_ACCESS_TOKEN_SECRET
-          )
-
           try:
+              tweet_text = generate_with_fallback(x_prompt)
+              if tweet_length(tweet_text) > 280:
+                  tweet_text = truncate_tweet(tweet_text)
+              print(f"Tweet ({tweet_length(tweet_text)} chars):\n{tweet_text}")
               x_client = tweepy.Client(
                   consumer_key=X_API_KEY, consumer_secret=X_API_SECRET,
                   access_token=X_ACCESS_TOKEN, access_token_secret=X_ACCESS_TOKEN_SECRET
               )
               r = x_client.create_tweet(text=tweet_text, user_auth=True)
               print(f"X投稿成功! ID: {r.data['id']}")
-          except tweepy.TweepyException as e:
-              print(f"X投稿失敗: {e}")
+          except Exception as e:
+              print(f"X投稿スキップ: {e}")
 
           # 7. Notionプロジェクトを「投稿済み」に更新
           update_props = {"ステータス": {"status": {"name": "投稿済み"}}}
