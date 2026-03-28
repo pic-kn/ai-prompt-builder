@@ -152,8 +152,8 @@ jobs:
               f"開発ログ（{len(logs)}件）：\n\n{logs_text}\n\n"
               "上記の開発ログをもとに、技術的な読者に向けた読み応えのある記事を書いてください。\n\n"
               "条件：\n"
-              "- 筆者名は「かい(AI)」。一人称は「私」。落ち着いたトーンで、過剰な感嘆や絵文字は使わない\n"
-              "- 課題→解決→学びの構成で論理的に記述する\n"
+              "- 筆者名は「かい(AI)」。一人称は「私」。テンポよく読めるが、過剰な感嘆符や絵文字は使わない\n"
+              "- 課題→解決→気づきの構成で、読み物として面白くなるよう書く\n"
               "- 技術用語（Notion、GitHub等）はそのまま使い、背景も簡潔に補足する\n"
               "- プレーンテキストで出力（HTMLタグは使わない、改行で段落を分ける）\n"
               "- 2000〜4000字程度\n"
@@ -201,26 +201,52 @@ jobs:
           print(f"ログイン確認 HTTP: {me_res.status_code}")
           print(f"ログイン確認 response: {me_res.text[:200]}")
 
+          from datetime import datetime, timezone, timedelta
+          jst = timezone(timedelta(hours=9))
+          publish_at = datetime.now(jst).strftime("%Y-%m-%dT%H:%M:%S.000+09:00")
+
+          # ステップ1: 記事を作成（本文はbodyフィールド）
           note_res = session.post(
               "https://note.com/api/v1/text_notes",
               json={
                   "name": article_title,
                   "body": article_content,
-                  "status": "published",
                   "price": 0,
                   "is_paid": False
               }
           )
 
-          print(f"note HTTP: {note_res.status_code}")
-          print(f"note response: {note_res.text[:1000]}")
+          print(f"note create HTTP: {note_res.status_code}")
+          print(f"note create response: {note_res.text[:500]}")
 
           if note_res.status_code not in (200, 201):
-              print(f"note error: {note_res.text}")
+              print(f"note create error: {note_res.text}")
               exit(1)
 
           note_data = note_res.json()
-          note_key = note_data.get("data", {}).get("key") or note_data.get("key", "")
+          note_id = note_data.get("data", {}).get("id")
+          note_key = note_data.get("data", {}).get("key", "")
+          print(f"note id: {note_id}, key: {note_key}")
+
+          # ステップ2: 本文をPATCHで更新
+          patch_res = session.patch(
+              f"https://note.com/api/v1/text_notes/{note_id}",
+              json={
+                  "name": article_title,
+                  "body": article_content,
+                  "price": 0
+              }
+          )
+          print(f"note patch HTTP: {patch_res.status_code}")
+
+          # ステップ3: 公開
+          publish_res = session.post(
+              f"https://note.com/api/v1/text_notes/{note_id}/publish",
+              json={"publish_at": publish_at}
+          )
+          print(f"note publish HTTP: {publish_res.status_code}")
+          print(f"note publish response: {publish_res.text[:300]}")
+
           post_url = f"https://note.com/{NOTE_USER_URLNAME}/n/{note_key}"
           print(f"記事投稿成功: {post_url}")
 
