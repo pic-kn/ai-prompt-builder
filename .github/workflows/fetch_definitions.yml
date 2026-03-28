@@ -35,7 +35,11 @@ jobs:
             git stash pop
             git add CLAUDE.md
             git commit -m "chore: Notionから定義を自動更新"
-            git push origin main
+            for i in 1 2 3; do
+              git pull --rebase origin main && git push origin main && break
+              echo "リトライ $i..."
+              sleep 3
+            done
           else
             echo "変更なし、スキップ"
           fi
