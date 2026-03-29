@@ -1,0 +1,118 @@
+name: Fix Notion Data
+
+on:
+  workflow_dispatch:
+    inputs:
+      database:
+        description: '対象DB（commit_log / project）'
+        required: true
+        type: choice
+        options:
+          - commit_log
+          - project
+      filter_property:
+        description: '絞り込むプロパティ名（例：プロジェクト）'
+        required: true
+        type: string
+      filter_value:
+        description: '絞り込む値（例：古いプロジェクト名）'
+        required: true
+        type: string
+      update_property:
+        description: '更新するプロパティ名（例：プロジェクト）'
+        required: true
+        type: string
+      update_value:
+        description: '更新後の値（例：新しいプロジェクト名）'
+        required: true
+        type: string
+
+jobs:
+  fix-notion-data:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install dependencies
+        run: pip install requests -q
+
+      - name: Fix Notion data
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+          NOTION_PROJECT_DB_ID: ${{ secrets.NOTION_PROJECT_DB_ID }}
+          DATABASE: ${{ inputs.database }}
+          FILTER_PROPERTY: ${{ inputs.filter_property }}
+          FILTER_VALUE: ${{ inputs.filter_value }}
+          UPDATE_PROPERTY: ${{ inputs.update_property }}
+          UPDATE_VALUE: ${{ inputs.update_value }}
+        run: |
+          python3 << 'PYEOF'
+          import os
+          import requests
+
+          NOTION_API_KEY = os.environ["NOTION_API_KEY"]
+          DATABASE = os.environ["DATABASE"]
+          FILTER_PROPERTY = os.environ["FILTER_PROPERTY"]
+          FILTER_VALUE = os.environ["FILTER_VALUE"]
+          UPDATE_PROPERTY = os.environ["UPDATE_PROPERTY"]
+          UPDATE_VALUE = os.environ["UPDATE_VALUE"]
+
+          db_id = os.environ["NOTION_PROJECT_DB_ID"] if DATABASE == "project" else os.environ["NOTION_DATABASE_ID"]
+
+          headers = {
+              "Authorization": f"Bearer {NOTION_API_KEY}",
+              "Content-Type": "application/json",
+              "Notion-Version": "2022-06-28"
+          }
+
+          # 対象ページを全件取得
+          pages = []
+          cursor = None
+          while True:
+              body = {
+                  "filter": {"property": FILTER_PROPERTY, "rich_text": {"contains": FILTER_VALUE}},
+                  "page_size": 100
+              }
+              if cursor:
+                  body["start_cursor"] = cursor
+              res = requests.post(f"https://api.notion.com/v1/databases/{db_id}/query", headers=headers, json=body)
+              data = res.json()
+              pages.extend(data.get("results", []))
+              if not data.get("has_more"):
+                  break
+              cursor = data.get("next_cursor")
+
+          print(f"{len(pages)}件ヒット")
+
+          # プロパティタイプを判定して更新
+          updated = 0
+          for page in pages:
+              page_id = page["id"]
+              prop = page["properties"].get(UPDATE_PROPERTY, {})
+              prop_type = prop.get("type")
+
+              if prop_type == "title":
+                  update_body = {UPDATE_PROPERTY: {"title": [{"text": {"content": UPDATE_VALUE}}]}}
+              elif prop_type == "rich_text":
+                  update_body = {UPDATE_PROPERTY: {"rich_text": [{"text": {"content": UPDATE_VALUE}}]}}
+              elif prop_type == "select":
+                  update_body = {UPDATE_PROPERTY: {"select": {"name": UPDATE_VALUE}}}
+              elif prop_type == "status":
+                  update_body = {UPDATE_PROPERTY: {"status": {"name": UPDATE_VALUE}}}
+              elif prop_type == "url":
+                  update_body = {UPDATE_PROPERTY: {"url": UPDATE_VALUE}}
+              else:
+                  print(f"未対応のプロパティタイプ: {prop_type}（page_id: {page_id}）")
+                  continue
+
+              r = requests.patch(
+                  f"https://api.notion.com/v1/pages/{page_id}",
+                  headers=headers,
+                  json={"properties": update_body}
+              )
+              if r.status_code == 200:
+                  updated += 1
+              else:
+                  print(f"更新失敗: {r.text}")
+
+          print(f"{updated}件更新完了")
+          PYEOF
