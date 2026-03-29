@@ -39,7 +39,7 @@ env:
   LIMIT: ""                  # 更新件数の上限（空なら全件）
   SORT_DIRECTION: "ascending" # ascending（古い順）/ descending（新しい順）
   UPDATE_PROPERTY: "完了日"
-  UPDATE_VALUE: "CLEAR"
+  UPDATE_VALUE: "LAST_COMMIT_DATE"
   # 第2プロパティ（不要なら空。UPDATE_VALUE_2に"TODAY"と入れると今日の日付になる）
   UPDATE_PROPERTY_2: ""
   UPDATE_VALUE_2: ""
@@ -169,13 +169,35 @@ jobs:
                   prop = page["properties"].get(UPDATE_PROPERTY, {})
                   prop_type = prop.get("type")
 
-                  # LAST_EDITED_TIMEは動的にlast_edited_timeを使用（既に値があればスキップ）
+                  # 動的な特殊値の処理
                   actual_value = UPDATE_VALUE
                   if UPDATE_VALUE == "LAST_EDITED_TIME":
                       existing = page["properties"].get(UPDATE_PROPERTY, {})
                       if existing.get("date") and existing["date"].get("start"):
                           continue
                       actual_value = page.get("last_edited_time", "")
+                  elif UPDATE_VALUE == "LAST_COMMIT_DATE":
+                      # プロジェクト名を取得してcommit DBの最終コミット日時を使用
+                      pname = ""
+                      for key, val in page["properties"].items():
+                          if val.get("type") == "title" and val.get("title"):
+                              pname = "".join([t["text"]["content"] for t in val["title"] if "text" in t])
+                              break
+                      commit_res = requests.post(
+                          f"https://api.notion.com/v1/databases/{os.environ['NOTION_DATABASE_ID']}/query",
+                          headers=headers,
+                          json={
+                              "filter": {"property": "プロジェクト", "rich_text": {"contains": pname[:50]}},
+                              "sorts": [{"property": "作成日", "direction": "descending"}],
+                              "page_size": 1
+                          }
+                      )
+                      commits = commit_res.json().get("results", [])
+                      if not commits:
+                          print(f"コミットなし: {pname}")
+                          continue
+                      actual_value = commits[0]["properties"].get("作成日", {}).get("date", {}).get("start", "")
+                      print(f"最終コミット日時: {actual_value}（{pname}）")
 
                   if actual_value == "CLEAR":
                       update_body = {UPDATE_PROPERTY: {"date": None} if prop_type == "date" else {prop_type: None}}
