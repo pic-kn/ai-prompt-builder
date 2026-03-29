@@ -30,7 +30,7 @@ env:
 
   # updateモード用
   FILTER_PROPERTY: "ステータス"
-  FILTER_VALUE: "完了"
+  FILTER_VALUE: ""
   FILTER_TYPE: "status"      # rich_text / select / status / date
   # 日付フィルター（作成日での絞り込み。不要な場合は空に）
   DATE_PROPERTY: ""
@@ -124,29 +124,29 @@ jobs:
               if UPDATE_VALUE_2 == "TODAY":
                   UPDATE_VALUE_2 = date.today().isoformat()
 
-              # フィルター構築
-              if FILTER_TYPE == "select":
-                  main_filter = {"property": FILTER_PROPERTY, "select": {"equals": FILTER_VALUE}}
-              elif FILTER_TYPE == "status":
-                  main_filter = {"property": FILTER_PROPERTY, "status": {"equals": FILTER_VALUE}}
-              else:
-                  main_filter = {"property": FILTER_PROPERTY, "rich_text": {"contains": FILTER_VALUE}}
+              # フィルター構築（FILTER_VALUEが空なら全件取得）
+              final_filter = None
+              if FILTER_VALUE:
+                  if FILTER_TYPE == "select":
+                      main_filter = {"property": FILTER_PROPERTY, "select": {"equals": FILTER_VALUE}}
+                  elif FILTER_TYPE == "status":
+                      main_filter = {"property": FILTER_PROPERTY, "status": {"equals": FILTER_VALUE}}
+                  else:
+                      main_filter = {"property": FILTER_PROPERTY, "rich_text": {"contains": FILTER_VALUE}}
 
-              filters = [main_filter]
-              if DATE_PROPERTY and DATE_AFTER:
-                  filters.append({"property": DATE_PROPERTY, "date": {"on_or_after": DATE_AFTER}})
-              if DATE_PROPERTY and DATE_BEFORE:
-                  filters.append({"property": DATE_PROPERTY, "date": {"on_or_before": DATE_BEFORE}})
-
-              final_filter = {"and": filters} if len(filters) > 1 else filters[0]
+                  filters = [main_filter]
+                  if DATE_PROPERTY and DATE_AFTER:
+                      filters.append({"property": DATE_PROPERTY, "date": {"on_or_after": DATE_AFTER}})
+                  if DATE_PROPERTY and DATE_BEFORE:
+                      filters.append({"property": DATE_PROPERTY, "date": {"on_or_before": DATE_BEFORE}})
+                  final_filter = {"and": filters} if len(filters) > 1 else filters[0]
 
               pages = []
               cursor = None
               while True:
-                  body = {
-                      "filter": final_filter,
-                      "page_size": 100
-                  }
+                  body = {"page_size": 100}
+                  if final_filter:
+                      body["filter"] = final_filter
                   if DATE_PROPERTY:
                       body["sorts"] = [{"property": DATE_PROPERTY, "direction": SORT_DIRECTION}]
                   if cursor:
