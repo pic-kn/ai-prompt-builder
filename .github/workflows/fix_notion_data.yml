@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       confirm:
-        description: '実行確認（"execute"と入力してください）'
+        description: '【実行内容】MODE=update / DATABASE=commit_log / FILTER=プロジェクト:"NotionからGemini記事生成→Zenn自動投稿パイプライン" / UPDATE=プロジェクト:"GitHubのコードをpushすると毎日22時にZennへ自動投稿されるシステム" ／ 確認できたら"execute"と入力'
         required: true
         type: string
 
