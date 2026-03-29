@@ -99,7 +99,7 @@ jobs:
               headers=notion_headers,
               json={
                   "filter": {"property": "ステータス", "status": {"equals": "完了"}},
-                  "sorts": [{"timestamp": "last_edited_time", "direction": "ascending"}],
+                  "sorts": [{"property": "完了日", "direction": "ascending"}],
                   "page_size": 1
               }
           )
