@@ -7,18 +7,17 @@ on:
       confirm:
         description: |
           【実行内容を確認してください】
-          MODE     : create
-          DATABASE : project
-          PROJECT  : "GitHubのコードをpushすると毎日22時にZennへ自動投稿されるシステム"
-          STATUS   : 完了
+          MODE     : (未設定)
+          DATABASE : (未設定)
+          ※ Claudeが変数を設定してからRun workflowしてください
           ※ 確認したら "execute" と入力して実行
         required: true
         type: string
 
 env:
   # ========== ここをClaudeが書き換える ==========
-  MODE: "create"           # update / create
-  DATABASE: "project"      # commit_log / project
+  MODE: ""                 # update / create
+  DATABASE: ""             # commit_log / project
 
   # updateモード用
   FILTER_PROPERTY: ""
@@ -27,8 +26,8 @@ env:
   UPDATE_VALUE: ""
 
   # createモード用
-  CREATE_PROJECT_NAME: "GitHubのコードをpushすると毎日22時にZennへ自動投稿されるシステム"
-  CREATE_STATUS: "完了"
+  CREATE_PROJECT_NAME: ""
+  CREATE_STATUS: "未着手"
   # =============================================
 
 jobs:
