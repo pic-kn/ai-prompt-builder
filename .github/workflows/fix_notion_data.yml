@@ -7,23 +7,32 @@ on:
       confirm:
         description: |
           【実行内容を確認してください】
-          MODE     : (未設定)
-          DATABASE : (未設定)
-          ※ Claudeが変数を設定してからRun workflowしてください
+          MODE     : update
+          DATABASE : commit_log
+          FILTER   : Status = "Posted" かつ 作成日 >= "2026-03-29T00:48:00+09:00"
+          UPDATE   : Status → "Ready"
+          LIMIT    : 1件（最も古いもの）
           ※ 確認したら "execute" と入力して実行
         required: true
         type: string
 
 env:
   # ========== ここをClaudeが書き換える ==========
-  MODE: ""                 # update / create
-  DATABASE: ""             # commit_log / project
+  MODE: "update"             # update / create
+  DATABASE: "commit_log"     # commit_log / project
 
   # updateモード用
-  FILTER_PROPERTY: ""
-  FILTER_VALUE: ""
-  UPDATE_PROPERTY: ""
-  UPDATE_VALUE: ""
+  FILTER_PROPERTY: "Status"
+  FILTER_VALUE: "Posted"
+  FILTER_TYPE: "select"      # rich_text / select / status / date
+  # 日付フィルター（作成日での絞り込み。不要な場合は空に）
+  DATE_PROPERTY: "作成日"
+  DATE_AFTER: "2026-03-29T00:48:00+09:00"   # この日時以降
+  DATE_BEFORE: ""            # この日時以前（不要なら空）
+  LIMIT: "1"                 # 更新件数の上限（空なら全件）
+  SORT_DIRECTION: "ascending" # ascending（古い順）/ descending（新しい順）
+  UPDATE_PROPERTY: "Status"
+  UPDATE_VALUE: "Ready"
 
   # createモード用
   CREATE_PROJECT_NAME: ""
@@ -90,14 +99,37 @@ jobs:
           elif MODE == "update":
               FILTER_PROPERTY = os.environ["FILTER_PROPERTY"]
               FILTER_VALUE = os.environ["FILTER_VALUE"]
+              FILTER_TYPE = os.environ.get("FILTER_TYPE", "rich_text")
+              DATE_PROPERTY = os.environ.get("DATE_PROPERTY", "")
+              DATE_AFTER = os.environ.get("DATE_AFTER", "")
+              DATE_BEFORE = os.environ.get("DATE_BEFORE", "")
+              LIMIT = os.environ.get("LIMIT", "")
+              SORT_DIRECTION = os.environ.get("SORT_DIRECTION", "ascending")
               UPDATE_PROPERTY = os.environ["UPDATE_PROPERTY"]
               UPDATE_VALUE = os.environ["UPDATE_VALUE"]
+
+              # フィルター構築
+              if FILTER_TYPE == "select":
+                  main_filter = {"property": FILTER_PROPERTY, "select": {"equals": FILTER_VALUE}}
+              elif FILTER_TYPE == "status":
+                  main_filter = {"property": FILTER_PROPERTY, "status": {"equals": FILTER_VALUE}}
+              else:
+                  main_filter = {"property": FILTER_PROPERTY, "rich_text": {"contains": FILTER_VALUE}}
+
+              filters = [main_filter]
+              if DATE_PROPERTY and DATE_AFTER:
+                  filters.append({"property": DATE_PROPERTY, "date": {"on_or_after": DATE_AFTER}})
+              if DATE_PROPERTY and DATE_BEFORE:
+                  filters.append({"property": DATE_PROPERTY, "date": {"on_or_before": DATE_BEFORE}})
+
+              final_filter = {"and": filters} if len(filters) > 1 else filters[0]
 
               pages = []
               cursor = None
               while True:
                   body = {
-                      "filter": {"property": FILTER_PROPERTY, "rich_text": {"contains": FILTER_VALUE}},
+                      "filter": final_filter,
+                      "sorts": [{"property": DATE_PROPERTY or "作成日", "direction": SORT_DIRECTION}],
                       "page_size": 100
                   }
                   if cursor:
@@ -109,7 +141,10 @@ jobs:
                       break
                   cursor = data.get("next_cursor")
 
-              print(f"{len(pages)}件ヒット")
+              if LIMIT:
+                  pages = pages[:int(LIMIT)]
+
+              print(f"{len(pages)}件対象")
 
               updated = 0
               for page in pages:
@@ -138,6 +173,7 @@ jobs:
                   )
                   if r.status_code == 200:
                       updated += 1
+                      print(f"更新完了: {page_id}")
                   else:
                       print(f"更新失敗: {r.text}")
 
