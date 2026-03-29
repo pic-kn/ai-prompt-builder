@@ -3,6 +3,11 @@ name: Fix Notion Data
 # Claudeが変数を書き換えてpushした後、手動でRun workflowを実行する
 on:
   workflow_dispatch:
+    inputs:
+      confirm:
+        description: '実行確認（"execute"と入力してください）'
+        required: true
+        type: string
 
 env:
   # ========== ここをClaudeが書き換える ==========
@@ -36,6 +41,10 @@ jobs:
           python3 << 'PYEOF'
           import os
           import requests
+
+          if "${{ inputs.confirm }}" != "execute":
+              print("確認コードが正しくありません。\"execute\"と入力してください。")
+              exit(1)
 
           NOTION_API_KEY = os.environ["NOTION_API_KEY"]
           MODE = os.environ["MODE"]
