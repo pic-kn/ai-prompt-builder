@@ -4,24 +4,14 @@ name: Fix Notion Data
 on:
   workflow_dispatch:
     inputs:
-      mode:
-        description: 'MODE: update'
-        required: false
-        type: string
-      database:
-        description: 'DATABASE: commit_log'
-        required: false
-        type: string
-      filter:
-        description: 'FILTER: プロジェクト = "NotionからGemini記事生成→Zenn自動投稿パイプライン"'
-        required: false
-        type: string
-      update:
-        description: 'UPDATE: プロジェクト → "GitHubのコードをpushすると毎日22時にZennへ自動投稿されるシステム"'
-        required: false
-        type: string
       confirm:
-        description: '↑内容を確認したら "execute" と入力して実行'
+        description: |
+          【実行内容を確認してください】
+          MODE     : update
+          DATABASE : commit_log
+          FILTER   : プロジェクト = "NotionからGemini記事生成→Zenn自動投稿パイプライン"
+          UPDATE   : プロジェクト → "GitHubのコードをpushすると毎日22時にZennへ自動投稿されるシステム"
+          ※ 確認したら "execute" と入力して実行
         required: true
         type: string
 
