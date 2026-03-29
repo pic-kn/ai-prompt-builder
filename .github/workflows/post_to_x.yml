@@ -73,13 +73,18 @@ jobs:
           def truncate_tweet(text, limit=280):
               result = ""
               count = 0
+              last_sentence_result = ""
               for c in text:
                   w = 2 if unicodedata.east_asian_width(c) in ('W', 'F') else 1
                   if count + w > limit - 3:
+                      if last_sentence_result:
+                          return last_sentence_result
                       result += "..."
                       break
                   result += c
                   count += w
+                  if c in ('。', '！', '？', '!', '?', '\n'):
+                      last_sentence_result = result
               return result
 
           notion_headers = {
