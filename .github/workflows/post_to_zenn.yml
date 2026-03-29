@@ -174,10 +174,7 @@ jobs:
               headers=notion_headers,
               json={
                   "filter": {
-                      "and": [
-                          {"property": "プロジェクト", "rich_text": {"contains": project_name[:50]}},
-                          {"property": "Status", "select": {"equals": "Posted"}}
-                      ]
+                      "property": "プロジェクト", "rich_text": {"contains": project_name[:50]}
                   },
                   "sorts": [{"property": "作成日", "direction": "ascending"}]
               }
