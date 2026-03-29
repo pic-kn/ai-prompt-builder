@@ -33,7 +33,7 @@ jobs:
               "X-GitHub-Api-Version": "2022-11-28"
           }
 
-          target_repos = ["pic-kn/presetry", "pic-kn/color-memo"]
+          target_repos = ["pic-kn/presetry", "pic-kn/color-memo", "pic-kn/adhd-manager"]
 
           def parse_definition_table(text):
               """定義一覧テーブルを行ごとに返す（ヘッダー・セパレータ・データ行）"""
