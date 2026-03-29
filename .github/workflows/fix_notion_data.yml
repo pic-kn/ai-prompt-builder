@@ -1,47 +1,24 @@
 name: Fix Notion Data
 
+# Claudeが変数を書き換えてpushした後、手動でRun workflowを実行する
 on:
   workflow_dispatch:
-    inputs:
-      mode:
-        description: '操作モード（update: 既存を修正 / create: 新規作成）'
-        required: true
-        type: choice
-        options:
-          - update
-          - create
-      database:
-        description: '対象DB（commit_log / project）'
-        required: true
-        type: choice
-        options:
-          - commit_log
-          - project
-      filter_property:
-        description: '[updateのみ] 絞り込むプロパティ名（例：プロジェクト）'
-        required: false
-        type: string
-      filter_value:
-        description: '[updateのみ] 絞り込む値（例：古いプロジェクト名）'
-        required: false
-        type: string
-      update_property:
-        description: '[updateのみ] 更新するプロパティ名（例：プロジェクト）'
-        required: false
-        type: string
-      update_value:
-        description: '[updateのみ] 更新後の値'
-        required: false
-        type: string
-      create_project_name:
-        description: '[createのみ] 作成するプロジェクト名'
-        required: false
-        type: string
-      create_status:
-        description: '[createのみ] ステータス（未着手 / 進行中 / 完了 / 投稿済み）'
-        required: false
-        type: string
-        default: '未着手'
+
+env:
+  # ========== ここをClaudeが書き換える ==========
+  MODE: "update"           # update / create
+  DATABASE: "commit_log"   # commit_log / project
+
+  # updateモード用
+  FILTER_PROPERTY: "プロジェクト"
+  FILTER_VALUE: "NotionからGemini記事生成→Zenn自動投稿パイプライン"
+  UPDATE_PROPERTY: "プロジェクト"
+  UPDATE_VALUE: "GitHubのコードをpushすると毎日22時にZennへ自動投稿されるシステム"
+
+  # createモード用
+  CREATE_PROJECT_NAME: ""
+  CREATE_STATUS: "未着手"
+  # =============================================
 
 jobs:
   fix-notion-data:
@@ -55,14 +32,6 @@ jobs:
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
           NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
           NOTION_PROJECT_DB_ID: ${{ secrets.NOTION_PROJECT_DB_ID }}
-          MODE: ${{ inputs.mode }}
-          DATABASE: ${{ inputs.database }}
-          FILTER_PROPERTY: ${{ inputs.filter_property }}
-          FILTER_VALUE: ${{ inputs.filter_value }}
-          UPDATE_PROPERTY: ${{ inputs.update_property }}
-          UPDATE_VALUE: ${{ inputs.update_value }}
-          CREATE_PROJECT_NAME: ${{ inputs.create_project_name }}
-          CREATE_STATUS: ${{ inputs.create_status }}
         run: |
           python3 << 'PYEOF'
           import os
@@ -84,7 +53,7 @@ jobs:
               status = os.environ["CREATE_STATUS"]
 
               if not project_name:
-                  print("create_project_nameが未指定です")
+                  print("CREATE_PROJECT_NAMEが未設定です")
                   exit(1)
 
               res = requests.post(
@@ -110,7 +79,6 @@ jobs:
               UPDATE_PROPERTY = os.environ["UPDATE_PROPERTY"]
               UPDATE_VALUE = os.environ["UPDATE_VALUE"]
 
-              # 対象ページを全件取得
               pages = []
               cursor = None
               while True:
@@ -129,7 +97,6 @@ jobs:
 
               print(f"{len(pages)}件ヒット")
 
-              # プロパティタイプを判定して更新
               updated = 0
               for page in pages:
                   page_id = page["id"]
