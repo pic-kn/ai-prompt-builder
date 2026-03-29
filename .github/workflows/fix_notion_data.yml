@@ -172,7 +172,7 @@ jobs:
                   # LAST_EDITED_TIMEは動的にlast_edited_timeを使用
                   actual_value = UPDATE_VALUE
                   if UPDATE_VALUE == "LAST_EDITED_TIME":
-                      actual_value = page.get("last_edited_time", "")[:10]
+                      actual_value = page.get("last_edited_time", "")
 
                   if prop_type == "title":
                       update_body = {UPDATE_PROPERTY: {"title": [{"text": {"content": actual_value}}]}}

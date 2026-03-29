@@ -115,7 +115,7 @@ jobs:
           for p in projects:
               kanryobi = p["properties"].get("完了日", {})
               if not kanryobi.get("date"):
-                  last_edited = p.get("last_edited_time", "")[:10]  # YYYY-MM-DD
+                  last_edited = p.get("last_edited_time", "")
                   requests.patch(
                       f"https://api.notion.com/v1/pages/{p['id']}",
                       headers=notion_headers,
