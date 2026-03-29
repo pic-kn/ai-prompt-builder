@@ -111,17 +111,34 @@ jobs:
               print("完了プロジェクトなし。スキップ")
               exit(0)
 
-          # 完了日が未設定のプロジェクトにlast_edited_timeを書き込む
+          # 完了日が未設定のプロジェクトにcommit DBの最終コミット日時を書き込む
           for p in projects:
               kanryobi = p["properties"].get("完了日", {})
               if not kanryobi.get("date"):
-                  last_edited = p.get("last_edited_time", "")
-                  requests.patch(
-                      f"https://api.notion.com/v1/pages/{p['id']}",
+                  pname = ""
+                  for key, val in p["properties"].items():
+                      if val.get("type") == "title" and val.get("title"):
+                          pname = "".join([t["text"]["content"] for t in val["title"] if "text" in t])
+                          break
+                  commit_res = requests.post(
+                      f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query",
                       headers=notion_headers,
-                      json={"properties": {"完了日": {"date": {"start": last_edited}}}}
+                      json={
+                          "filter": {"property": "プロジェクト", "rich_text": {"contains": pname[:50]}},
+                          "sorts": [{"property": "作成日", "direction": "descending"}],
+                          "page_size": 1
+                      }
                   )
-                  print(f"完了日をセット: {last_edited}（{p['id']}）")
+                  commits = commit_res.json().get("results", [])
+                  if commits:
+                      latest_date = commits[0]["properties"].get("作成日", {}).get("date", {}).get("start", "")
+                      if latest_date:
+                          requests.patch(
+                              f"https://api.notion.com/v1/pages/{p['id']}",
+                              headers=notion_headers,
+                              json={"properties": {"完了日": {"date": {"start": latest_date}}}}
+                          )
+                          print(f"完了日をセット: {latest_date}（{pname}）")
 
           # 完了日で昇順ソートして1件取得
           project_res2 = requests.post(
