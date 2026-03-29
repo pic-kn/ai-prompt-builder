@@ -1,7 +1,13 @@
 name: Fix Notion Data
 
-# Claudeが変数を書き換えてpushした後、手動でRun workflowを実行する
+# Claudeが変数を書き換えてpushすると自動実行される
+# 手動実行時はRun workflowから"execute"を入力して実行
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/fix_notion_data.yml'
   workflow_dispatch:
     inputs:
       confirm:
@@ -56,7 +62,8 @@ jobs:
           import os
           import requests
 
-          if "${{ inputs.confirm }}" != "execute":
+          # push経由の場合はconfirmスキップ、workflow_dispatch経由は"execute"必須
+          if "${{ github.event_name }}" == "workflow_dispatch" and "${{ inputs.confirm }}" != "execute":
               print("確認コードが正しくありません。\"execute\"と入力してください。")
               exit(1)
 
