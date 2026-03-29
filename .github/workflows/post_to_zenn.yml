@@ -297,6 +297,11 @@ jobs:
           post_url = f"https://zenn.dev/{ZENN_USERNAME}/articles/{slug}"
           print(f"記事投稿成功: {post_url}")
 
+          # ZennがGitHubから同期するまで待機（即時X投稿すると404になる）
+          import time
+          print("Zenn同期待ち（3分）...")
+          time.sleep(180)
+
           # 7. Xに告知ツイートを投稿
           def tweet_length(text):
               count = 0
