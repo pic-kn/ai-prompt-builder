@@ -7,28 +7,28 @@ on:
       confirm:
         description: |
           【実行内容を確認してください】
-          MODE     : update
-          DATABASE : commit_log
-          FILTER   : プロジェクト = "NotionからGemini記事生成→Zenn自動投稿パイプライン"
-          UPDATE   : プロジェクト → "GitHubのコードをpushすると毎日22時にZennへ自動投稿されるシステム"
+          MODE     : create
+          DATABASE : project
+          PROJECT  : "GitHubのコードをpushすると毎日22時にZennへ自動投稿されるシステム"
+          STATUS   : 完了
           ※ 確認したら "execute" と入力して実行
         required: true
         type: string
 
 env:
   # ========== ここをClaudeが書き換える ==========
-  MODE: "update"           # update / create
-  DATABASE: "commit_log"   # commit_log / project
+  MODE: "create"           # update / create
+  DATABASE: "project"      # commit_log / project
 
   # updateモード用
-  FILTER_PROPERTY: "プロジェクト"
-  FILTER_VALUE: "NotionからGemini記事生成→Zenn自動投稿パイプライン"
-  UPDATE_PROPERTY: "プロジェクト"
-  UPDATE_VALUE: "GitHubのコードをpushすると毎日22時にZennへ自動投稿されるシステム"
+  FILTER_PROPERTY: ""
+  FILTER_VALUE: ""
+  UPDATE_PROPERTY: ""
+  UPDATE_VALUE: ""
 
   # createモード用
-  CREATE_PROJECT_NAME: ""
-  CREATE_STATUS: "未着手"
+  CREATE_PROJECT_NAME: "GitHubのコードをpushすると毎日22時にZennへ自動投稿されるシステム"
+  CREATE_STATUS: "完了"
   # =============================================
 
 jobs:
