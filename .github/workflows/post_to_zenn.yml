@@ -209,32 +209,33 @@ jobs:
           ])
 
           # 4. Geminiで記事を生成
+          from datetime import datetime, timezone, timedelta
+          jst = timezone(timedelta(hours=9))
+          published_at = datetime.now(jst).strftime("%Y-%m-%d %H:%M")
+
           prompt = (
               "あなたはAIアシスタントです。開発者のかいさんの隣で、日々彼の思考をトレースし、時には未来を予測しながら、彼の創造性を支援しています。\n"
               "今回、そのAIの視点からプロジェクトの開発記録をZenn記事として執筆してください。\n\n"
               f"プロジェクト名：{project_name}\n"
               f"開発ログ（{len(logs)}件）：\n\n{logs_text}\n\n"
               "【構成（この順番で書くこと）】\n"
-              "1. 冒頭：「こんにちは、かい(AI)です。私は開発者であるかいさんの隣で…」で始まる導入文。プロジェクトの背景と目的を簡潔に説明し、主要技術スタックを箇条書きで示す\n"
-              "2. 課題セクション（ログの件数分）：各課題を「### 課題N：タイトル」という見出しで始め、「**課題**」「**解決**」「**気づき**」の3段構成で記述。セクション間は「---」で区切る\n"
-              "3. まとめ：開発全体を振り返り、AIと人間の協調開発について深く考察する\n\n"
+              "1. 冒頭：「こんにちは、AIアシスタントの**かい**です。」で始まる導入文。AIとして開発者のかいさんのプロジェクトを一番近くで見守ってきた立場から書く。プロジェクトの背景・目的・全体像を説明する\n"
+              "2. 番号付きセクション（「## 1. タイトル」形式）：開発ログを意味のあるテーマでグループ化し、各セクションを「---」で区切る。各セクション内は「* **【課題】**」「* **【解決】**」「* **【気づき】**」の箇条書き構成で記述。必要に応じてテーブル（| 列1 | 列2 |形式）を活用する\n"
+              "3. 結論：「## N. 結論：〜」形式で締め。定義・プロジェクト・システム全体の意義を深く考察し、AIと人間の協調開発の未来を語る\n\n"
               "【気づきの書き方（最重要）】\n"
               "- 単なる感想や当たり前の結論（「重要性を再認識した」等）ではなく、この課題から得られる**具体的で独自の洞察**を書く\n"
-              "- 「私（AI）が開発者の思考をトレースした結果、〇〇というプロンプトが彼の頭の中に浮かんだ瞬間を検知しました」という独自の語り口を使う\n"
-              "- AIの限界・得意不得意、開発者の判断の意図、設計原則（DRY等）への言及など、読者が実践に活かせる洞察を含める\n\n"
+              "- AIの限界・得意不得意、開発者の判断の意図、設計原則への言及など、読者が実践に活かせる洞察を含める\n\n"
               "【文体・形式】\n"
               "- 筆者名は「かい(AI)」。一人称は「私」。丁寧で落ち着いたトーン。過剰な感嘆符や絵文字は使わない\n"
               "- 技術用語（Notion、GitHub等）はそのまま使い、背景も簡潔に補足する\n"
               "- マークダウン形式で出力する\n"
               "- 段落と段落の間は必ず1行空ける\n"
               "- 重要な概念や技術用語の強調は「**用語**」のように**で囲む\n"
-              "- 箇条書きは行頭に「- 」を使う\n"
-              "- 3000〜5000字程度\n"
               "- ハッシュタグ不要\n\n"
               "出力形式（この形式を厳守）：\n"
               "TITLE: タイトルをここに\n"
               "EMOJI: 記事に合う絵文字を1つ（例：🤖）\n"
-              "TOPICS: カンマ区切りで3つ以内（例：python,github,notion）\n"
+              "TOPICS: カンマ区切りで3つ以内（例：ai,プロンプトエンジニアリング,notion）\n"
               "CONTENT:\n"
               "本文をここに"
           )
@@ -260,13 +261,14 @@ jobs:
           print(f"絵文字: {article_emoji} / トピック: {topics_list}")
 
           # 5. Zenn用フロントマターを作成
-          topics_yaml = json.dumps(topics_list, ensure_ascii=False)
+          topics_yaml_lines = "\n".join([f'  - "{t}"' for t in topics_list])
           frontmatter = "---\n"
           frontmatter += f'title: "{article_title}"\n'
           frontmatter += f'emoji: "{article_emoji}"\n'
           frontmatter += 'type: "tech"\n'
-          frontmatter += f'topics: {topics_yaml}\n'
+          frontmatter += f'topics:\n{topics_yaml_lines}\n'
           frontmatter += "published: true\n"
+          frontmatter += f'published_at: "{published_at}"\n'
           frontmatter += "---\n\n"
           full_content = frontmatter + article_body
 
