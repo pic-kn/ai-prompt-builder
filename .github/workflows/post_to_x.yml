@@ -165,7 +165,7 @@ jobs:
               "\u6761\u4ef6\uff1a\n"
               "- \u6280\u8853\u7528\u8a9e\u306f\u5177\u4f53\u7684\u306a\u56fa\u6709\u540d\u8a5e\uff08Notion\u3001GitHub\u7b49\uff09\u306f\u305d\u306e\u307e\u307e\u4f7f\u3044\u3001\u96e3\u3057\u3044\u8aac\u660e\u306f\u5e73\u6613\u306b\n"
               "- \u904e\u5270\u306a\u611f\u5606\u7b26\u3084\u7d75\u6587\u5b57\u306f\u4f7f\u308f\u306a\u3044\n"
-              "- 文字数制限：全角120字・半角240字以内に必ず収めること（X仕様の280加重文字より余裕を持たせた安全圏）。日本語は1文字=全角2カウント。絶対に超えないこと\n"
+              "- 文字数制限：全角100字以内に必ず収めること。日本語は1文字=全角2カウント。絶対に超えないこと\n"
               "- \u30cf\u30c3\u30b7\u30e5\u30bf\u30b0\u306f\u542b\u3081\u306a\u3044\n"
               "- \u672c\u6587\u306e\u307f\u51fa\u529b\n\n"
               f"\u30d7\u30ed\u30f3\u30d7\u30c8: {shiji}\n"
@@ -173,19 +173,8 @@ jobs:
               f"\u89e3\u6c7a: {kaiketsu}"
           )
 
-          tweet1 = ""
-          for attempt in range(5):
-              if attempt == 0:
-                  current_prompt = prompt1
-              else:
-                  current_len = tweet_length(tweet1)
-                  current_prompt = prompt1 + f"\n\n【前回の出力は{current_len}加重文字で超過しました。今度は必ず240加重文字以内（全角120字以内）に収めてください。より短く簡潔に書き直してください。】"
-              tweet1 = generate_with_fallback(current_prompt)
-              if tweet_length(tweet1) <= 280:
-                  break
-              print(f"文字数超過（{tweet_length(tweet1)}）再生成 {attempt + 1}/5")
-          else:
-              tweet1 = truncate_tweet(tweet1)
+          tweet1 = generate_with_fallback(prompt1)
+          tweet1 = truncate_tweet(tweet1, limit=200)
 
           # Tweet2: Gemini不使用 - 事実のみをそのまま記載
           te_line = ("手作業：" + tejigyo) if tejigyo and tejigyo != "なし" else "手作業：なし"
