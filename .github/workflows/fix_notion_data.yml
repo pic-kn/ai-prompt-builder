@@ -25,21 +25,21 @@ on:
 
 env:
   # ========== ここをClaudeが書き換える ==========
-  MODE: "rename_property"    # update / create / rename_property
+  MODE: "update"             # update / create / rename_property
   DATABASE: "project"        # commit_log / project
 
   # updateモード用
-  FILTER_PROPERTY: "ステータス"
-  FILTER_VALUE: ""
-  FILTER_TYPE: "status"      # rich_text / select / status / date
+  FILTER_PROPERTY: "プロジェクト名"
+  FILTER_VALUE: "Claude Codeで定義を会話から自動提案・蓄積するシステム"
+  FILTER_TYPE: "rich_text"   # rich_text / select / status / date
   # 日付フィルター（作成日での絞り込み。不要な場合は空に）
   DATE_PROPERTY: ""
   DATE_AFTER: ""             # この日時以降（不要なら空）
   DATE_BEFORE: ""            # この日時以前（不要なら空）
-  LIMIT: ""                  # 更新件数の上限（空なら全件）
+  LIMIT: "1"                 # 更新件数の上限（空なら全件）
   SORT_DIRECTION: "ascending" # ascending（古い順）/ descending（新しい順）
-  UPDATE_PROPERTY: "完了日"
-  UPDATE_VALUE: "LAST_COMMIT_DATE"
+  UPDATE_PROPERTY: "ステータス"
+  UPDATE_VALUE: "完了"
   # 第2プロパティ（不要なら空。UPDATE_VALUE_2に"TODAY"と入れると今日の日付になる）
   UPDATE_PROPERTY_2: ""
   UPDATE_VALUE_2: ""
