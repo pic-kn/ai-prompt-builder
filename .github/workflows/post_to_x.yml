@@ -144,7 +144,7 @@ jobs:
               if proj_res.status_code == 200:
                   proj_results = proj_res.json().get("results", [])
                   if proj_results:
-                      url_prop = proj_results[0]["properties"].get("beehiivリンク", {})
+                      url_prop = proj_results[0]["properties"].get("Zennリンク", {})
                       zenn_url = url_prop.get("url") or ""
               if zenn_url:
                   print(f"Zenn記事URL: {zenn_url}")

@@ -25,7 +25,7 @@ on:
 
 env:
   # ========== ここをClaudeが書き換える ==========
-  MODE: "update"             # update / create
+  MODE: "rename_property"    # update / create / rename_property
   DATABASE: "project"        # commit_log / project
 
   # updateモード用
@@ -47,6 +47,10 @@ env:
   # createモード用
   CREATE_PROJECT_NAME: ""
   CREATE_STATUS: "進行中"
+
+  # rename_propertyモード用（DBのプロパティ名を変更する）
+  RENAME_FROM: "beehiivリンク"
+  RENAME_TO: "Zennリンク"
   # =============================================
 
 jobs:
@@ -82,7 +86,24 @@ jobs:
               "Notion-Version": "2022-06-28"
           }
 
-          if MODE == "create":
+          if MODE == "rename_property":
+              RENAME_FROM = os.environ["RENAME_FROM"]
+              RENAME_TO = os.environ["RENAME_TO"]
+              DATABASE = os.environ["DATABASE"]
+              db_id = os.environ["NOTION_PROJECT_DB_ID"] if DATABASE == "project" else os.environ["NOTION_DATABASE_ID"]
+
+              res = requests.patch(
+                  f"https://api.notion.com/v1/databases/{db_id}",
+                  headers=headers,
+                  json={"properties": {RENAME_FROM: {"name": RENAME_TO}}}
+              )
+              if res.status_code == 200:
+                  print(f"プロパティ名変更完了: {RENAME_FROM} → {RENAME_TO}")
+              else:
+                  print(f"プロパティ名変更失敗: {res.text}")
+                  exit(1)
+
+          elif MODE == "create":
               project_name = os.environ["CREATE_PROJECT_NAME"]
               status = os.environ["CREATE_STATUS"]
 

@@ -345,7 +345,7 @@ jobs:
           # 8. Notionプロジェクトを「投稿済み」に更新
           update_props = {
               "ステータス": {"status": {"name": "投稿済み"}},
-              "beehiivリンク": {"url": post_url}
+              "Zennリンク": {"url": post_url}
           }
 
           update_res = requests.patch(
