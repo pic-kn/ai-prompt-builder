@@ -145,9 +145,10 @@ jobs:
               while True:
                   body = {
                       "filter": final_filter,
-                      "sorts": [{"property": DATE_PROPERTY or "作成日", "direction": SORT_DIRECTION}],
                       "page_size": 100
                   }
+                  if DATE_PROPERTY:
+                      body["sorts"] = [{"property": DATE_PROPERTY, "direction": SORT_DIRECTION}]
                   if cursor:
                       body["start_cursor"] = cursor
                   res = requests.post(f"https://api.notion.com/v1/databases/{db_id}/query", headers=headers, json=body)
