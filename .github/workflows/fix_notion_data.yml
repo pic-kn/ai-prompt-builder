@@ -196,7 +196,8 @@ jobs:
                       if not commits:
                           print(f"コミットなし: {pname}")
                           continue
-                      actual_value = commits[0]["properties"].get("作成日", {}).get("date", {}).get("start", "")
+                      date_prop = commits[0]["properties"].get("作成日") or {}
+                      actual_value = (date_prop.get("date") or {}).get("start", "")
                       print(f"最終コミット日時: {actual_value}（{pname}）")
 
                   if actual_value == "CLEAR":
