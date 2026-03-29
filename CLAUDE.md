@@ -54,7 +54,7 @@ git pull origin main
 
 ## Notionデータ修正ルール
 
-Notionのデータに不整合が生じた場合、`fix_notion_data.yml`を使って修正する。
+NotionのデータをClaude経由で変更・追加・修正する場合、まず`fix_notion_data.yml`での対応を提案する。
 
 ### 運用ルール
 - ユーザーはinputsを手入力しない。**Claudeがワークフロー上部の変数セクションを書き換えてpushし、ユーザーはRun workflowを押すだけ**
