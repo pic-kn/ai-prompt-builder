@@ -43,7 +43,7 @@ env:
 
   # createモード用
   CREATE_PROJECT_NAME: ""
-  CREATE_STATUS: "未着手"
+  CREATE_STATUS: "進行中"
   # =============================================
 
 jobs:
